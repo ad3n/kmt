@@ -20,11 +20,23 @@ Manage postgresql cluster migration easly
 
 ## Install
 
-- Download source using `go get github.com/ad3n/kmt`
+### Using Go Install
 
-- Install `go install github.com/ad3n/kmt` to install `kmt` into `$GOBIN`
+- Install `go install github.com/ad3n/kmt@latest` to install `kmt` into `$GOBIN`
 
-- Check using `kmt --help`
+- Check using `kmt help`
+
+### Using Go Build
+
+- Clone repository `git clone github.com/ad3n/kmt`
+
+- Run `go build -o kmt`
+
+- Check using `./kmt help`
+
+## Upgrade
+
+- Run `kmt upgrade` to upgrade to lastest version
 
 ## Commands available
 
@@ -58,7 +70,7 @@ Manage postgresql cluster migration easly
 
 - `kmt about` to show version
 
-Run `kmt --help` for complete commands
+Run `kmt help` for complete commands
 
 ## Usage
 

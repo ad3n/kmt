@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ad3n/kmt/pkg/config"
+	"github.com/ad3n/kmt/v2/pkg/config"
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"

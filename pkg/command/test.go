@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/ad3n/kmt/pkg/config"
+	"github.com/ad3n/kmt/v2/pkg/config"
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
@@ -52,7 +52,7 @@ func (t test) Call() error {
 	progress.Start()
 
 	cli := exec.Command(t.config.PgDump, "--help")
-	_, err := cli.CombinedOutput()
+	err := cli.Start()
 	if err != nil {
 		progress.Stop()
 
