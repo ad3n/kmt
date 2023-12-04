@@ -57,7 +57,7 @@ func (u up) Call(source string, schema string) error {
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", u.config.Folder, schema))
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-	progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", u.boldFont.Sprint(source), u.boldFont.Sprint(schema))
+	progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", u.successColor.Sprint(source), u.successColor.Sprint(schema))
 	progress.Start()
 
 	err = migrator.Up()

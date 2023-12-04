@@ -50,7 +50,7 @@ func (d drop) Call(source string, schema string) error {
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", d.config.Folder, schema))
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-	progress.Suffix = fmt.Sprintf(" Dropping migrations for %s on %s schema", d.boldFont.Sprint(source), d.boldFont.Sprint(schema))
+	progress.Suffix = fmt.Sprintf(" Dropping migrations for %s on %s schema", d.successColor.Sprint(source), d.successColor.Sprint(schema))
 	progress.Start()
 
 	err = migrator.Drop()

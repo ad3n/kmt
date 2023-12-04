@@ -20,6 +20,7 @@ type (
 	Ddl struct {
 		Name       string
 		Definition Migration
+		Insert     Migration
 		Reference  Migration
 		ForeignKey Migration
 	}
@@ -66,6 +67,7 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 	var downReferenceScript strings.Builder
 	var upForeignScript strings.Builder
 	var downForeignScript strings.Builder
+	var insertScript strings.Builder
 	var skipNextLine bool = false
 	var previousLine string
 
@@ -120,6 +122,13 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 				continue
 			}
 
+			if t.insertScript(line) {
+				insertScript.WriteString(line)
+				insertScript.WriteString("\n")
+
+				continue
+			}
+
 			upScript.WriteString(line)
 			upScript.WriteString("\n")
 
@@ -167,6 +176,10 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 			),
 			DownScript: downScript.String(),
 		},
+		Insert: Migration{
+			UpScript:   insertScript.String(),
+			DownScript: "",
+		},
 		Reference: Migration{
 			UpScript:   upReferenceScript.String(),
 			DownScript: downReferenceScript.String(),
@@ -200,6 +213,10 @@ func (Table) downForeignkey(line string) bool {
 
 func (Table) foreignScript(line string) bool {
 	return strings.Contains(line, FOREIGN_KEY)
+}
+
+func (Table) insertScript(line string) bool {
+	return strings.Contains(line, INSERT_INTO)
 }
 
 func (Table) constraintScript(line string) bool {

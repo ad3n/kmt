@@ -20,17 +20,7 @@ Manage postgresql cluster migration easly
 
 ## Install
 
-- Download latest release `https://github.com/ad3n/kmt/tags`
-
-- Extract source
-
-- Download dependencies `cd kmt && go get && go mod tidy`
-
-- Build `go build -o kmt`
-
-- Run `mv kmt /usr/local/bin/kmt`
-
-- Set executable `chmod a+x /usr/local/bin/kmt`
+- Build `go install https://github.com/ad3n/kmt` to install `kmt` into `$GOBIN`
 
 - Check using `kmt --help`
 

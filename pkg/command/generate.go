@@ -43,11 +43,12 @@ func NewGenerate(config config.Migration, connection *sql.DB) generate {
 	}
 }
 
-func do(cMigration <-chan migration, cDdl chan<- db.Ddl) {
+func do(cMigration <-chan migration, cDdl chan<- db.Ddl, cInsert chan<- db.Ddl) {
 	for m := range cMigration {
 		script := m.tableTool.Generate(fmt.Sprintf("%s.%s", m.schema, m.table), m.schemaOnly)
 
 		cDdl <- script
+		cInsert <- script
 
 		err := os.WriteFile(fmt.Sprintf("%s/%s/%d_table_%s.up.sql", m.folder, m.schema, m.version, m.table), []byte(script.Definition.UpScript), 0777)
 		if err != nil {
@@ -154,15 +155,16 @@ func (g generate) Call(schema string) error {
 	cTable := schemaTool.ListTable(nWorker, schema, schemaConfig["excludes"]...)
 
 	ddlTool := db.NewTable(g.config.PgDump, source)
-	cDdl := make(chan db.Ddl)
+	cDdl := make(chan db.Ddl, nWorker)
+	cInsert := make(chan db.Ddl, nWorker)
 	tTable := schemaTool.CountTable(schema, len(schemaConfig["excludes"]))
 
-	go func(version int64, schema string, tTable int, cDdl chan<- db.Ddl, cTable <-chan string) {
+	go func(version int64, schema string, tTable int, cDdl chan<- db.Ddl, cInsert chan<- db.Ddl, cTable <-chan string) {
 		cMigration := make(chan migration)
 		wg := iSync.WaitGroup{}
 
 		for i := 1; i <= nWorker; i++ {
-			go do(cMigration, cDdl)
+			go do(cMigration, cDdl, cInsert)
 		}
 
 		count := 1
@@ -200,39 +202,83 @@ func (g generate) Call(schema string) error {
 		wg.Wait()
 
 		close(cDdl)
-	}(version, schema, tTable, cDdl, cTable)
+		close(cInsert)
+	}(version, schema, tTable, cDdl, cInsert, cTable)
 
 	version = version + int64(tTable*2)
 
-	for ddl := range cDdl {
-		if ddl.ForeignKey.UpScript == "" {
-			continue
+	go func(version int64, schema string, cDdl <-chan db.Ddl, wg *iSync.WaitGroup) {
+		wg.Add(1)
+
+		for ddl := range cDdl {
+			if ddl.ForeignKey.UpScript == "" {
+				continue
+			}
+
+			err := os.WriteFile(fmt.Sprintf("%s/%s/%d_foreign_key_%s.up.sql", g.config.Folder, schema, version, ddl.Name), []byte(ddl.ForeignKey.UpScript), 0777)
+			if err != nil {
+				progress.Stop()
+
+				g.errorColor.Println(err.Error())
+
+				continue
+			}
+
+			err = os.WriteFile(fmt.Sprintf("%s/%s/%d_foreign_key_%s.down.sql", g.config.Folder, schema, version, ddl.Name), []byte(ddl.ForeignKey.DownScript), 0777)
+			if err != nil {
+				progress.Stop()
+
+				g.errorColor.Println(err.Error())
+
+				continue
+			}
+
+			version++
 		}
 
-		err := os.WriteFile(fmt.Sprintf("%s/%s/%d_foreign_keys_%s.up.sql", g.config.Folder, schema, version, ddl.Name), []byte(ddl.ForeignKey.UpScript), 0777)
-		if err != nil {
-			progress.Stop()
+		wg.Done()
+	}(version, schema, cDdl, &wg)
 
-			g.errorColor.Println(err.Error())
+	version = version + int64(tTable*3)
 
-			continue
+	go func(version int64, schema string, cInsert <-chan db.Ddl, wg *iSync.WaitGroup) {
+		wg.Add(1)
+
+		for ddl := range cInsert {
+			if ddl.Insert.UpScript == "" {
+				continue
+			}
+
+			err := os.WriteFile(fmt.Sprintf("%s/%s/%d_insert_%s.up.sql", g.config.Folder, schema, version, ddl.Name), []byte(ddl.Insert.UpScript), 0777)
+			if err != nil {
+				progress.Stop()
+
+				g.errorColor.Println(err.Error())
+
+				continue
+			}
+
+			err = os.WriteFile(fmt.Sprintf("%s/%s/%d_insert_%s.down.sql", g.config.Folder, schema, version, ddl.Name), []byte(ddl.Insert.DownScript), 0777)
+			if err != nil {
+				progress.Stop()
+
+				g.errorColor.Println(err.Error())
+
+				continue
+			}
+
+			version++
+
 		}
 
-		err = os.WriteFile(fmt.Sprintf("%s/%s/%d_foreign_keys_%s.down.sql", g.config.Folder, schema, version, ddl.Name), []byte(ddl.ForeignKey.DownScript), 0777)
-		if err != nil {
-			progress.Stop()
-
-			g.errorColor.Println(err.Error())
-
-			continue
-		}
-
-		version++
-	}
+		wg.Done()
+	}(version, schema, cInsert, &wg)
 
 	progress.Stop()
 	progress.Suffix = fmt.Sprintf(" Processing functions on schema %s...", g.successColor.Sprint(schema))
 	progress.Start()
+
+	version = version + int64(tTable*4)
 
 	functions := db.NewFunction(g.connection).GenerateDdl(schema)
 	for s := range functions {

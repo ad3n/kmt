@@ -56,6 +56,7 @@ func (s sync) Run(cluster string, schema string) error {
 		}
 
 		close(connection)
+		close(name)
 	}(s.config.Source, lists, s.config.Connections, connection, name)
 
 	for source := range connection {
@@ -69,7 +70,7 @@ func (s sync) Run(cluster string, schema string) error {
 		migrator := config.NewMigrator(db, source.Name, schema, fmt.Sprintf("%s/%s", s.config.Folder, schema))
 
 		progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", s.boldFont.Sprint(<-name), s.boldFont.Sprint(schema))
+		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", s.successColor.Sprint(<-name), s.successColor.Sprint(schema))
 		progress.Start()
 
 		err = migrator.Up()
