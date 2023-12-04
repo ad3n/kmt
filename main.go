@@ -536,7 +536,7 @@ func main() {
 					bColor := color.New(color.Bold)
 
 					fmt.Printf("%s\n\n", gColor.Sprintf("Kejawen Migration Tool (KMT) - %s", bColor.Sprint(config.VERSION_STRING)))
-					fmt.Printf("%s<surya.iksanudi@Kejawen.com>\n", gColor.Sprint("Muhamad Surya Iksanudin"))
+					fmt.Printf("%s<surya.iksanudin@gmail.com>\n", gColor.Sprint("Muhamad Surya Iksanudin"))
 
 					return nil
 				},
