@@ -1,4 +1,4 @@
-# Koinworks Migration Tool (KMT)
+# Kejawen Migration Tool (KMT)
 
 Manage postgresql cluster migration easly
 
@@ -20,7 +20,7 @@ Manage postgresql cluster migration easly
 
 ## Install
 
-- Download latest release `https://github.com/suryakoinworks/kw-migrate/tags`
+- Download latest release `https://github.com/ad3n/kmt/tags`
 
 - Extract source
 

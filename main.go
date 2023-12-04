@@ -18,7 +18,7 @@ import (
 func main() {
 	app := &cli.App{
 		Name:                   "kmt",
-		Usage:                  "Koinworks Migration Tool (KMT)",
+		Usage:                  "Kejawen Migration Tool (KMT)",
 		Description:            "kmt help",
 		EnableBashCompletion:   true,
 		UseShortOptionHandling: true,
@@ -40,7 +40,6 @@ func main() {
 			},
 			{
 				Name:        "up",
-				Aliases:     []string{"up"},
 				Description: "up <db> <schema>",
 				Usage:       "Migration up",
 				Action: func(ctx *cli.Context) error {
@@ -536,8 +535,8 @@ func main() {
 					gColor := color.New(color.FgGreen)
 					bColor := color.New(color.Bold)
 
-					fmt.Printf("%s\n\n", gColor.Sprintf("Koinworks Migration Tool (KMT) - %s", bColor.Sprint(config.VERSION_STRING)))
-					fmt.Printf("%s<surya.iksanudi@koinworks.com>\n", gColor.Sprint("Muhamad Surya Iksanudin"))
+					fmt.Printf("%s\n\n", gColor.Sprintf("Kejawen Migration Tool (KMT) - %s", bColor.Sprint(config.VERSION_STRING)))
+					fmt.Printf("%s<surya.iksanudi@Kejawen.com>\n", gColor.Sprint("Muhamad Surya Iksanudin"))
 
 					return nil
 				},

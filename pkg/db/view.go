@@ -35,7 +35,7 @@ func (s view) GenerateDdl(schema string) <-chan Migration {
 
 			channel <- Migration{
 				Name:       name,
-				UpScript:   definition,
+				UpScript:   fmt.Sprintf(SECURE_CREATE_VIEW, name, definition),
 				DownScript: fmt.Sprintf(SECURE_DROP_VIEW, name),
 			}
 		}

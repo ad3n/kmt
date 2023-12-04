@@ -85,6 +85,10 @@ func Parse(path string) Config {
 
 	for k, cs := range config.Migration.Connections {
 		for x, v := range cs.Schemas {
+			if v == nil {
+				v = map[string][]string{}
+			}
+
 			_, ok := v["excludes"]
 			if !ok {
 				v["excludes"] = []string{}
