@@ -69,11 +69,17 @@ func (r run) Call(source string, schema string, step int) error {
 
 	migrations := []string{}
 	number := 0
-	for _, file := range files {
+	for i, file := range files {
+		if i%2 == 0 {
+			continue
+		}
+
 		f := strings.Split(file.Name(), "_")
 		s, _ := strconv.Atoi(f[0])
 		if !valid && version == uint(s) {
 			valid = true
+
+			continue
 		}
 
 		if valid && number < step {
