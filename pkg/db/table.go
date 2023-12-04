@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bufio"
 	"fmt"
 	"kmt/pkg/config"
 	"os"
@@ -65,49 +66,85 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 	var downReferenceScript strings.Builder
 	var upForeignScript strings.Builder
 	var downForeignScript strings.Builder
-	var skip bool = false
+	var skipNextLine bool = false
+	var previousLine string
 
-	result, _ := cli.CombinedOutput()
-	lines := strings.Split(string(result), "\n")
-	for n, line := range lines {
-		if t.skip(line) || skip {
-			skip = false
+	stdout, _ := cli.StdoutPipe()
+	_ = cli.Start()
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if t.skip(line) {
+			continue
+		}
+
+		if skipNextLine {
+			skipNextLine = false
+
+			if !t.constraintScript(line) {
+				upScript.WriteString(line)
+				upScript.WriteString("\n")
+
+				previousLine = ""
+
+				continue
+			}
+
+			if t.foreignScript(line) {
+				upForeignScript.WriteString(previousLine)
+				upForeignScript.WriteString("\n")
+				upForeignScript.WriteString(line)
+				upForeignScript.WriteString("\n")
+
+				previousLine = ""
+
+				continue
+			}
+
+			upReferenceScript.WriteString(previousLine)
+			upReferenceScript.WriteString("\n")
+			upReferenceScript.WriteString(line)
+			upReferenceScript.WriteString("\n")
+
+			previousLine = ""
 
 			continue
 		}
 
-		if t.downScript(line) {
-			if t.downReferenceScript(line) {
-				if t.downForeignkey(line) {
-					downForeignScript.WriteString(line)
-					upScript.WriteString("\n")
-				} else {
-					downReferenceScript.WriteString(line)
-					upScript.WriteString("\n")
-				}
-			} else {
-				downScript.WriteString(line)
-				downScript.WriteString("\n")
+		if !t.downScript(line) {
+			if t.alterScript(line) {
+				skipNextLine = true
+				previousLine = line
+
+				continue
 			}
-		} else {
-			if t.refereceScript(line, n, lines) {
-				if t.foreignScript(lines[n+1]) {
-					upForeignScript.WriteString(line)
-					upForeignScript.WriteString(lines[n+1])
-					upScript.WriteString("\n")
-				} else {
-					upReferenceScript.WriteString(line)
-					upReferenceScript.WriteString("\n")
-					upReferenceScript.WriteString(lines[n+1])
-					upReferenceScript.WriteString("\n")
-				}
-				skip = true
-			} else {
-				upScript.WriteString(line)
-				upScript.WriteString("\n")
-			}
+
+			upScript.WriteString(line)
+			upScript.WriteString("\n")
+
+			continue
 		}
+
+		if !t.downReferenceScript(line) {
+			downScript.WriteString(line)
+			downScript.WriteString("\n")
+
+			continue
+		}
+
+		if t.downForeignkey(line) {
+			downForeignScript.WriteString(line)
+			downForeignScript.WriteString("\n")
+
+			continue
+		}
+
+		downReferenceScript.WriteString(line)
+		downReferenceScript.WriteString("\n")
 	}
+
+	cli.Wait()
 
 	return Ddl{
 		Name: strings.Replace(name, ".", "_", -1),
@@ -165,6 +202,10 @@ func (Table) foreignScript(line string) bool {
 	return strings.Contains(line, FOREIGN_KEY)
 }
 
-func (Table) refereceScript(line string, n int, lines []string) bool {
-	return strings.Contains(line, ALTER_TABLE) && strings.Contains(lines[n+1], ADD_CONSTRAINT)
+func (Table) constraintScript(line string) bool {
+	return strings.Contains(line, ADD_CONSTRAINT)
+}
+
+func (Table) alterScript(line string) bool {
+	return strings.Contains(line, ALTER_TABLE)
 }
