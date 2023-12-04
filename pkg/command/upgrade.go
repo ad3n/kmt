@@ -2,12 +2,13 @@ package command
 
 import (
 	"fmt"
-	"kmt/pkg/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ad3n/kmt/pkg/config"
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"

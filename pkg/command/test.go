@@ -2,8 +2,9 @@ package command
 
 import (
 	"fmt"
-	"kmt/pkg/config"
 	"os/exec"
+
+	"github.com/ad3n/kmt/pkg/config"
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"

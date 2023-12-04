@@ -1,4 +1,4 @@
-module kmt
+module github.com/ad3n/kmt
 
 go 1.16
 

@@ -3,12 +3,13 @@ package db
 import (
 	"bufio"
 	"fmt"
-	"kmt/pkg/config"
 	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/ad3n/kmt/pkg/config"
 )
 
 type (

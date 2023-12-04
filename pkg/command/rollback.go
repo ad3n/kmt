@@ -2,7 +2,8 @@ package command
 
 import (
 	"fmt"
-	"kmt/pkg/config"
+
+	"github.com/ad3n/kmt/pkg/config"
 
 	"github.com/fatih/color"
 )

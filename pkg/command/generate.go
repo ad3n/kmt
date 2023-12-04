@@ -3,11 +3,12 @@ package command
 import (
 	"database/sql"
 	"fmt"
-	"kmt/pkg/config"
-	"kmt/pkg/db"
 	"os"
 	iSync "sync"
 	"time"
+
+	"github.com/ad3n/kmt/pkg/config"
+	"github.com/ad3n/kmt/pkg/db"
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
