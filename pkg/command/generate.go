@@ -161,7 +161,7 @@ func (g generate) Call(schema string) error {
 	tTable := schemaTool.CountTable(schema, len(schemaConfig["excludes"]))
 
 	go func(version int64, schema string, tTable int, cDdl chan<- db.Ddl, cInsert chan<- db.Ddl, cTable <-chan string) {
-		cMigration := make(chan migration)
+		cMigration := make(chan migration, nWorker)
 		wg := iSync.WaitGroup{}
 
 		for i := 1; i <= nWorker; i++ {
@@ -267,7 +267,6 @@ func (g generate) Call(schema string) error {
 			}
 
 			version++
-
 		}
 
 		wg.Done()
