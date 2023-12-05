@@ -70,6 +70,7 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 	var downForeignScript strings.Builder
 	var insertScript strings.Builder
 	var skipNextLine bool = false
+	var waitForSemicolon bool = false
 	var previousLine string
 
 	stdout, _ := cli.StdoutPipe()
@@ -116,6 +117,18 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 		}
 
 		if !t.downScript(line) {
+			if waitForSemicolon {
+				insertScript.WriteString(line)
+
+				if !t.waitForSemicolon(line) {
+					waitForSemicolon = false
+				}
+
+				if !waitForSemicolon {
+					insertScript.WriteString("\n")
+				}
+			}
+
 			if t.alterScript(line) {
 				skipNextLine = true
 				previousLine = line
@@ -124,8 +137,15 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 			}
 
 			if t.insertScript(line) {
+				if t.waitForSemicolon(line) {
+					waitForSemicolon = true
+				}
+
 				insertScript.WriteString(line)
-				insertScript.WriteString("\n")
+
+				if !waitForSemicolon {
+					insertScript.WriteString("\n")
+				}
 
 				continue
 			}
@@ -210,6 +230,10 @@ func (Table) downForeignkey(line string) bool {
 	regex := regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk`)
 
 	return regex.MatchString(line)
+}
+
+func (Table) waitForSemicolon(line string) bool {
+	return !strings.HasSuffix(line, ");")
 }
 
 func (Table) foreignScript(line string) bool {

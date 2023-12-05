@@ -36,11 +36,20 @@ func (t test) Call() error {
 		progress.Suffix = fmt.Sprintf(" Test connection to %s...", t.successColor.Sprint(i))
 		progress.Start()
 
-		_, err := config.NewConnection(c)
+		db, err := config.NewConnection(c)
 		if err != nil {
 			progress.Stop()
 
 			t.errorColor.Println(err.Error())
+
+			return nil
+		}
+
+		_, err = db.Query("SELECT 1")
+		if err != nil {
+			progress.Stop()
+
+			t.errorColor.Printf("Connection '%s' error %s \n", i, err.Error())
 
 			return nil
 		}
