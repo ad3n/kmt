@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ad3n/kmt/pkg/command"
-	"github.com/ad3n/kmt/pkg/config"
+	"github.com/ad3n/kmt/v2/pkg/command"
+	"github.com/ad3n/kmt/v2/pkg/config"
 
 	"github.com/fatih/color"
 	"github.com/jedib0t/go-pretty/v6/table"

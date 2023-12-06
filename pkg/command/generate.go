@@ -7,8 +7,8 @@ import (
 	iSync "sync"
 	"time"
 
-	"github.com/ad3n/kmt/pkg/config"
-	"github.com/ad3n/kmt/pkg/db"
+	"github.com/ad3n/kmt/v2/pkg/config"
+	"github.com/ad3n/kmt/v2/pkg/db"
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
@@ -161,7 +161,7 @@ func (g generate) Call(schema string) error {
 	tTable := schemaTool.CountTable(schema, len(schemaConfig["excludes"]))
 
 	go func(version int64, schema string, tTable int, cDdl chan<- db.Ddl, cInsert chan<- db.Ddl, cTable <-chan string) {
-		cMigration := make(chan migration)
+		cMigration := make(chan migration, nWorker)
 		wg := iSync.WaitGroup{}
 
 		for i := 1; i <= nWorker; i++ {
@@ -208,9 +208,8 @@ func (g generate) Call(schema string) error {
 
 	version = version + int64(tTable*2)
 
+	wg.Add(1)
 	go func(version int64, schema string, cDdl <-chan db.Ddl, wg *iSync.WaitGroup) {
-		wg.Add(1)
-
 		for ddl := range cDdl {
 			if ddl.ForeignKey.UpScript == "" {
 				continue
@@ -242,9 +241,8 @@ func (g generate) Call(schema string) error {
 
 	version = version + int64(tTable*3)
 
+	wg.Add(1)
 	go func(version int64, schema string, cInsert <-chan db.Ddl, wg *iSync.WaitGroup) {
-		wg.Add(1)
-
 		for ddl := range cInsert {
 			if ddl.Insert.UpScript == "" {
 				continue
@@ -269,7 +267,6 @@ func (g generate) Call(schema string) error {
 			}
 
 			version++
-
 		}
 
 		wg.Done()

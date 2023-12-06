@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ad3n/kmt/pkg/config"
+	"github.com/ad3n/kmt/v2/pkg/config"
 
 	"github.com/fatih/color"
 )
