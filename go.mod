@@ -1,4 +1,4 @@
-module github.com/ad3n/kmt
+module github.com/ad3n/kmt/v2
 
 go 1.16
 
@@ -13,16 +13,13 @@ require (
 
 require (
 	github.com/ProtonMail/go-crypto v0.0.0-20230923063757-afb1ddc0824c // indirect
-	github.com/acomagu/bufpipe v1.0.4 // indirect
 	github.com/cloudflare/circl v1.3.6 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/go-git/go-git/v5 v5.10.1
 	github.com/jedib0t/go-pretty/v6 v6.4.9
-	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/sergi/go-diff v1.3.1 // indirect
-	github.com/skeema/knownhosts v1.2.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
 )
