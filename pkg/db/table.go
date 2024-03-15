@@ -1,7 +1,7 @@
 package db
 
 import (
-	"bufio"
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,6 +16,7 @@ type (
 	Table struct {
 		command string
 		config  config.Connection
+		db      *sql.DB
 	}
 
 	Ddl struct {
@@ -27,8 +28,8 @@ type (
 	}
 )
 
-func NewTable(command string, config config.Connection) Table {
-	return Table{command: command, config: config}
+func NewTable(command string, config config.Connection, db *sql.DB) Table {
+	return Table{command: command, config: config, db: db}
 }
 
 func (t Table) Generate(name string, schemaOnly bool) Ddl {
@@ -69,112 +70,105 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 	var upForeignScript strings.Builder
 	var downForeignScript strings.Builder
 	var insertScript strings.Builder
-	var skipNextLine bool = false
+	var deleteScript strings.Builder
+	var skip bool = false
 	var waitForSemicolon bool = false
-	var previousLine string
 
-	stdout, _ := cli.StdoutPipe()
-	_ = cli.Start()
+	primaryKey := t.primaryKey(name)
+	if primaryKey == name {
+		primaryKey = ""
+	}
 
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if t.skip(line) {
-			continue
-		}
-
-		if skipNextLine {
-			skipNextLine = false
-
-			if !t.constraintScript(line) {
-				upScript.WriteString(line)
-				upScript.WriteString("\n")
-
-				previousLine = ""
-
-				continue
-			}
-
-			if t.foreignScript(line) {
-				upForeignScript.WriteString(previousLine)
-				upForeignScript.WriteString("\n")
-				upForeignScript.WriteString(line)
-				upForeignScript.WriteString("\n")
-
-				previousLine = ""
-
-				continue
-			}
-
-			upReferenceScript.WriteString(previousLine)
-			upReferenceScript.WriteString("\n")
-			upReferenceScript.WriteString(line)
-			upReferenceScript.WriteString("\n")
-
-			previousLine = ""
+	result, _ := cli.CombinedOutput()
+	lines := strings.Split(string(result), "\n")
+	for n, line := range lines {
+		if t.skip(line) || skip {
+			skip = false
 
 			continue
 		}
 
-		if !t.downScript(line) {
-			if waitForSemicolon {
-				insertScript.WriteString(line)
+		if t.downScript(line) {
+			if t.downReferenceScript(line) {
+				if t.downForeignkey(line) {
+					downForeignScript.WriteString(line)
+					downForeignScript.WriteString("\n")
 
-				if !t.waitForSemicolon(line) {
-					waitForSemicolon = false
+					continue
 				}
 
-				if !waitForSemicolon {
-					insertScript.WriteString("\n")
-				}
-			}
-
-			if t.alterScript(line) {
-				skipNextLine = true
-				previousLine = line
+				downReferenceScript.WriteString(line)
+				downReferenceScript.WriteString("\n")
 
 				continue
 			}
 
-			if t.insertScript(line) {
-				if t.waitForSemicolon(line) {
-					waitForSemicolon = true
-				}
-
-				insertScript.WriteString(line)
-
-				if !waitForSemicolon {
-					insertScript.WriteString("\n")
-				}
-
-				continue
-			}
-
-			upScript.WriteString(line)
-			upScript.WriteString("\n")
-
-			continue
-		}
-
-		if !t.downReferenceScript(line) {
 			downScript.WriteString(line)
 			downScript.WriteString("\n")
 
 			continue
 		}
 
-		if t.downForeignkey(line) {
-			downForeignScript.WriteString(line)
-			downForeignScript.WriteString("\n")
+		if t.refereceScript(line, n, lines) {
+			if t.foreignScript(lines[n+1]) {
+				upForeignScript.WriteString(line)
+				upForeignScript.WriteString("\n")
+				upForeignScript.WriteString(lines[n+1])
+				upForeignScript.WriteString("\n")
+
+				continue
+			}
+
+			upReferenceScript.WriteString(line)
+			upReferenceScript.WriteString("\n")
+			upReferenceScript.WriteString(lines[n+1])
+			upReferenceScript.WriteString("\n")
+
+			skip = true
 
 			continue
 		}
 
-		downReferenceScript.WriteString(line)
-		downReferenceScript.WriteString("\n")
-	}
+		if waitForSemicolon {
+			insertScript.WriteString("\n")
+			insertScript.WriteString(line)
 
-	cli.Wait()
+			if !t.waitForSemicolon(line) {
+				waitForSemicolon = false
+			}
+
+			if !waitForSemicolon {
+				insertScript.WriteString("\n")
+			}
+		}
+
+		if t.insertScript(line) {
+			if t.waitForSemicolon(line) {
+				waitForSemicolon = true
+			}
+
+			insertScript.WriteString(line)
+			if primaryKey != "" {
+				deleteScript.WriteString("DELETE FROM ")
+				deleteScript.WriteString(name)
+				deleteScript.WriteString(" WHERE ")
+				deleteScript.WriteString(primaryKey)
+				deleteScript.WriteString(" = ")
+				deleteScript.WriteString(t.keyValue(line, name, !waitForSemicolon))
+				deleteScript.WriteString(";\n")
+			}
+
+			if !waitForSemicolon {
+				insertScript.WriteString("\n")
+			}
+
+			continue
+		}
+
+		upScript.WriteString(line)
+		upScript.WriteString("\n")
+
+	}
 
 	return Ddl{
 		Name: strings.Replace(name, ".", "_", -1),
@@ -199,7 +193,7 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 		},
 		Insert: Migration{
 			UpScript:   insertScript.String(),
-			DownScript: "",
+			DownScript: deleteScript.String(),
 		},
 		Reference: Migration{
 			UpScript:   upReferenceScript.String(),
@@ -210,6 +204,38 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 			DownScript: downForeignScript.String(),
 		},
 	}
+}
+
+func (t Table) primaryKey(name string) string {
+	tables := strings.Split(name, ".")
+	rows, err := t.db.Query(fmt.Sprintf(QUERY_GET_PRIMARY_KEY, tables[0], tables[1]))
+	if err != nil {
+		fmt.Println(err.Error())
+
+		return ""
+	}
+
+	for rows.Next() {
+		err = rows.Scan(&name)
+		if err != nil {
+			fmt.Println(err.Error())
+
+			break
+		}
+	}
+
+	return name
+}
+
+func (Table) keyValue(line string, name string, between bool) string {
+	line = strings.TrimLeft(line, fmt.Sprintf(SQL_INSERT_INTO_START, name))
+	if between {
+		line = strings.TrimRight(line, SQL_INSERT_INTO_CLOSE)
+	}
+
+	v := strings.Split(line, ",")
+
+	return v[0]
 }
 
 func (Table) skip(line string) bool {
@@ -232,22 +258,18 @@ func (Table) downForeignkey(line string) bool {
 	return regex.MatchString(line)
 }
 
-func (Table) waitForSemicolon(line string) bool {
-	return !strings.HasSuffix(line, ");")
-}
-
 func (Table) foreignScript(line string) bool {
 	return strings.Contains(line, FOREIGN_KEY)
+}
+
+func (Table) refereceScript(line string, n int, lines []string) bool {
+	return strings.Contains(line, ALTER_TABLE) && strings.Contains(lines[n+1], ADD_CONSTRAINT)
 }
 
 func (Table) insertScript(line string) bool {
 	return strings.Contains(line, INSERT_INTO)
 }
 
-func (Table) constraintScript(line string) bool {
-	return strings.Contains(line, ADD_CONSTRAINT)
-}
-
-func (Table) alterScript(line string) bool {
-	return strings.Contains(line, ALTER_TABLE)
+func (Table) waitForSemicolon(line string) bool {
+	return !strings.HasSuffix(line, ");")
 }

@@ -17,9 +17,9 @@ const (
 
 	ADD_CONSTRAINT = "ADD CONSTRAINT"
 
-	FOREIGN_KEY = "FOREIGN KEY"
-
 	INSERT_INTO = "INSERT INTO"
+
+	FOREIGN_KEY = "FOREIGN KEY"
 
 	CREATE_TABLE = "CREATE TABLE"
 
@@ -52,6 +52,21 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
     `
+
+	SQL_INSERT_INTO_START = "INSERT INTO %s VALUES ("
+	SQL_INSERT_INTO_CLOSE = ");"
+
+	QUERY_GET_PRIMARY_KEY = `
+SELECT
+    kcu.column_name as key_column
+FROM information_schema.table_constraints tco
+JOIN information_schema.key_column_usage kcu
+    ON kcu.constraint_name = tco.constraint_name
+    AND kcu.constraint_schema = tco.constraint_schema
+    AND kcu.constraint_name = tco.constraint_name
+WHERE tco.constraint_type = 'PRIMARY KEY'
+    AND kcu.table_schema = '%s'
+    AND kcu.table_name = '%s';`
 
 	QUERY_LIST_FUNCTION = `
 SELECT
