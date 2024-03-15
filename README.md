@@ -22,7 +22,7 @@ Manage postgresql cluster migration easly
 
 ### Using Go Install
 
-- Install `go install github.com/ad3n/kmt@latest` to install `kmt` into `$GOBIN`
+- Install `go install github.com/ad3n/kmt/v2@latest` to install `kmt` into `$GOBIN`
 
 - Check using `kmt help`
 
@@ -126,3 +126,4 @@ migration:
 - [x] Show State/Compare
 - [x] Upgrade Command
 - [x] Refactor Codes
+- [ ] Table level comparasion
