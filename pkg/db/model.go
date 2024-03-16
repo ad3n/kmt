@@ -7,6 +7,17 @@ type (
 		DownScript string
 	}
 
+	Column struct {
+		DefaultValue string
+		Nullable     bool
+		DataType     string
+	}
+
+	Compare struct {
+		Table1 Column
+		Table2 Column
+	}
+
 	Migrate interface {
 		GenerateDdl(schema string) []Migration
 	}
@@ -138,4 +149,14 @@ FROM pg_matviews
 WHERE schemaname = '%s'
 ORDER BY schemaname,
     view_name;`
+
+	QUERY_DESCRIBE_TABLE = `
+SELECT
+    column_name AS name,
+    COALESCE(column_default, '') AS default_value,
+    LOWER(is_nullable) AS is_nullable,
+    data_type AS data_type
+FROM information_schema.columns
+WHERE table_name = '%s'
+ORDER BY ordinal_position;`
 )

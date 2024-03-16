@@ -126,4 +126,5 @@ migration:
 - [x] Show State/Compare
 - [x] Upgrade Command
 - [x] Refactor Codes
-- [ ] Table level comparasion
+- [x] Table level comparison
+- [ ] Create migration based on table comparison

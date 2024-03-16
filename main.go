@@ -11,6 +11,7 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/command"
 	"github.com/ad3n/kmt/v2/pkg/config"
 
+	mtable "github.com/aquasecurity/table"
 	"github.com/fatih/color"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/urfave/cli/v2"
@@ -264,12 +265,13 @@ func main() {
 
 					t := table.NewWriter()
 					t.SetOutputMirror(os.Stdout)
-					t.AppendHeader(table.Row{"No", "Connection", "Schema", "Migration File", "Version", "Sync"})
+					t.SetStyle(table.StyleLight)
+					t.AppendHeader(table.Row{"No", "Connection", "Schema", "File", "Version", "Sync", "Diff"})
 
 					if ctx.NArg() == 2 {
 						db := ctx.Args().Get(0)
 						schema := ctx.Args().Get(1)
-						version := cmd.Call(db, schema)
+						version, diff := cmd.Call(db, schema)
 						if version == 0 {
 							return nil
 						}
@@ -288,13 +290,13 @@ func main() {
 						sync := uint(v) == version
 						var status string
 						if sync {
-							status = color.New(color.FgGreen).Sprint("✔")
+							status = color.New(color.FgGreen).Sprint("v")
 						} else {
 							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
 						t.AppendRows([]table.Row{
-							{1, db, schema, v, version, status},
+							{1, db, schema, v, version, status, diff},
 						})
 						t.Render()
 
@@ -311,7 +313,7 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							version := cmd.Call(db, k)
+							version, diff := cmd.Call(db, k)
 							if version == 0 {
 								return nil
 							}
@@ -330,13 +332,13 @@ func main() {
 							sync := uint(v) == version
 							var status string
 							if sync {
-								status = color.New(color.FgGreen).Sprint("✔")
+								status = color.New(color.FgGreen).Sprint("v")
 							} else {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
 							t.AppendRows([]table.Row{
-								{number, db, k, v, version, status},
+								{number, db, k, v, version, status, diff},
 							})
 
 							number++
@@ -354,7 +356,7 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							version := cmd.Call(c, k)
+							version, diff := cmd.Call(c, k)
 							if version == 0 {
 								return nil
 							}
@@ -373,13 +375,13 @@ func main() {
 							sync := uint(v) == version
 							var status string
 							if sync {
-								status = color.New(color.FgGreen).Sprint("✔")
+								status = color.New(color.FgGreen).Sprint("v")
 							} else {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
 							t.AppendRows([]table.Row{
-								{number, c, k, v, version, status},
+								{number, c, k, v, version, status, diff},
 							})
 
 							number++
@@ -406,6 +408,7 @@ func main() {
 
 					t := table.NewWriter()
 					t.SetOutputMirror(os.Stdout)
+					t.SetStyle(table.StyleLight)
 
 					source, ok := config.Migration.Connections[ctx.Args().Get(0)]
 					if !ok {
@@ -417,9 +420,9 @@ func main() {
 						return fmt.Errorf("connection '%s' not found", ctx.Args().Get(1))
 					}
 
-					t.AppendHeader(table.Row{"No", "Schema", "Migration File", fmt.Sprintf("%s Version", ctx.Args().Get(0)), fmt.Sprintf("%s Version", ctx.Args().Get(1)), "Sync"})
-
 					if ctx.NArg() == 3 {
+						t.AppendHeader(table.Row{"No", "Schema", ctx.Args().Get(0), ctx.Args().Get(1), "Sync", "Diff"})
+
 						schema := ctx.Args().Get(2)
 						_, ok := source.Schemas[schema]
 						if !ok {
@@ -431,32 +434,21 @@ func main() {
 							return fmt.Errorf("schema '%s' not found on %s", schema, ctx.Args().Get(1))
 						}
 
-						vSource, vCompare := cmd.Call(ctx.Args().Get(0), ctx.Args().Get(1), schema)
-						if vSource == 0 || vCompare == 0 {
+						vSource, vCompare, diff := cmd.Call(ctx.Args().Get(0), ctx.Args().Get(1), schema)
+						if vSource == 0 {
 							return nil
 						}
 
-						files, err := os.ReadDir(fmt.Sprintf("%s/%s", config.Migration.Folder, schema))
-						if err != nil {
-							fmt.Println(err.Error())
-
-							return nil
-						}
-
-						tFiles := len(files)
-						file := strings.Split(files[tFiles-1].Name(), "_")
-						version, _ := strconv.Atoi(file[0])
-
-						sync := uint(version) == vSource && vSource == vCompare
+						sync := vSource == vCompare
 						var status string
 						if sync {
-							status = color.New(color.FgGreen).Sprint("✔")
+							status = color.New(color.FgGreen).Sprint("v")
 						} else {
 							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
 						t.AppendRows([]table.Row{
-							{1, schema, version, vSource, vCompare, status},
+							{1, schema, vSource, vCompare, status, diff},
 						})
 						t.Render()
 
@@ -464,14 +456,15 @@ func main() {
 					}
 
 					number := 1
+					t.AppendHeader(table.Row{"No", "Schema", "File", ctx.Args().Get(0), ctx.Args().Get(1), "Sync", "Diff"})
 					for k := range source.Schemas {
 						for l := range compare.Schemas {
 							if k != l {
 								continue
 							}
 
-							vSource, vCompare := cmd.Call(ctx.Args().Get(0), ctx.Args().Get(1), k)
-							if vSource == 0 || vCompare == 0 {
+							vSource, vCompare, diff := cmd.Call(ctx.Args().Get(0), ctx.Args().Get(1), k)
+							if vSource == 0 {
 								return nil
 							}
 
@@ -489,17 +482,99 @@ func main() {
 							sync := uint(version) == vSource && vSource == vCompare
 							var status string
 							if sync {
-								status = color.New(color.FgGreen).Sprint("✔")
+								status = color.New(color.FgGreen).Sprint("v")
 							} else {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
 							t.AppendRows([]table.Row{
-								{number, k, version, vSource, vCompare, status},
+								{number, k, version, vSource, vCompare, status, diff},
 							})
 
 							number++
 						}
+					}
+
+					t.Render()
+
+					return nil
+				},
+			},
+			{
+				Name:        "detail",
+				Aliases:     []string{"d"},
+				Description: "detail <table> <schema> <db1> [<db2>]",
+				Usage:       "Show detail of table on specific schema",
+				Action: func(ctx *cli.Context) error {
+					if ctx.NArg() < 3 {
+						return errors.New("not enough arguments. Usage: kmt detail <table> <schema> <db1> [<db2>]")
+					}
+
+					config := config.Parse(config.CONFIG_FILE)
+					cmd := command.NewDetail(config.Migration)
+
+					t := mtable.New(os.Stdout)
+
+					if ctx.NArg() == 3 {
+						columns := cmd.Describe(ctx.Args().Get(0), ctx.Args().Get(1), ctx.Args().Get(2))
+
+						t.AddHeaders("NO", "NAME", "DATA TYPE", "NULL?", "DEFAULT")
+
+						number := 1
+						for k, v := range columns {
+							var status string
+							if v.Nullable {
+								status = color.New(color.FgGreen).Sprint("v")
+							} else {
+								status = color.New(color.FgRed, color.Bold).Sprint("x")
+							}
+
+							t.AddRow(fmt.Sprintf("%d", number), k, v.DataType, status, v.DefaultValue)
+
+							number++
+						}
+
+						t.Render()
+
+						return nil
+					}
+
+					columns := cmd.Compare(ctx.Args().Get(0), ctx.Args().Get(1), ctx.Args().Get(2), ctx.Args().Get(3))
+
+					t.SetHeaders("NO", "NAME", strings.ToUpper(ctx.Args().Get(2)), strings.ToUpper(ctx.Args().Get(3)))
+					t.AddHeaders("NO", "NAME", "DATA TYPE", "NULL?", "DEFAULT", "DATA TYPE", "NULL?", "DEFAULT")
+					t.SetHeaderColSpans(0, 1, 1, 3, 3)
+					t.SetAutoMergeHeaders(true)
+
+					number := 1
+					for k, v := range columns {
+						if v.Table1.DataType == "" {
+							v.Table1.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
+							v.Table1.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						if v.Table2.DataType == "" {
+							v.Table2.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
+							v.Table2.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						var status1 string
+						var status2 string
+						if v.Table1.Nullable {
+							status1 = color.New(color.FgGreen).Sprint("v")
+						} else {
+							status1 = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						if v.Table2.Nullable {
+							status2 = color.New(color.FgGreen).Sprint("v")
+						} else {
+							status2 = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						t.AddRow(fmt.Sprintf("%d", number), k, v.Table1.DataType, status1, v.Table1.DefaultValue, v.Table2.DataType, status2, v.Table2.DefaultValue)
+
+						number++
 					}
 
 					t.Render()

@@ -13,6 +13,7 @@ require (
 
 require (
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
+	github.com/aquasecurity/table v1.8.0 // indirect
 	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/go-git/go-git/v5 v5.11.0
