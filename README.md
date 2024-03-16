@@ -127,4 +127,4 @@ migration:
 - [x] Upgrade Command
 - [x] Refactor Codes
 - [x] Table level comparison
-- [ ] Create migration based on table comparison
+- [x] Dump sql for table comparison
