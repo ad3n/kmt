@@ -18,6 +18,8 @@ Manage postgresql cluster migration easly
 
 - Auto clean dirty migration
 
+- And many more
+
 ## Install
 
 ### Using Go Install
