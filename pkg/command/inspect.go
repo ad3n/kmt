@@ -7,15 +7,15 @@ import (
 	"github.com/fatih/color"
 )
 
-type detail struct {
+type inspect struct {
 	config       config.Migration
 	boldFont     *color.Color
 	errorColor   *color.Color
 	successColor *color.Color
 }
 
-func NewDetail(config config.Migration) detail {
-	return detail{
+func NewInspect(config config.Migration) inspect {
+	return inspect{
 		config:       config,
 		boldFont:     color.New(color.Bold),
 		errorColor:   color.New(color.FgRed),
@@ -23,7 +23,7 @@ func NewDetail(config config.Migration) detail {
 	}
 }
 
-func (d detail) Describe(table string, schema string, connection string) map[string]db.Column {
+func (d inspect) Describe(table string, schema string, connection string) map[string]db.Column {
 	cfg, ok := d.config.Connections[connection]
 	if !ok {
 		d.errorColor.Printf("Database connection '%s' not found\n", d.boldFont.Sprint(connection))
@@ -39,7 +39,7 @@ func (d detail) Describe(table string, schema string, connection string) map[str
 	return db.NewTable("", cfg, conn).Detail(table)
 }
 
-func (d detail) Compare(table string, schema string, db1 string, db2 string) map[string]db.Compare {
+func (d inspect) Compare(table string, schema string, db1 string, db2 string) map[string]db.Compare {
 	cfg, ok := d.config.Connections[db1]
 	if !ok {
 		d.errorColor.Printf("Database connection '%s' not found\n", d.boldFont.Sprint(db1))

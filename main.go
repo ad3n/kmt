@@ -10,10 +10,10 @@ import (
 
 	"github.com/ad3n/kmt/v2/pkg/command"
 	"github.com/ad3n/kmt/v2/pkg/config"
+	"github.com/ad3n/kmt/v2/pkg/db"
 
 	mtable "github.com/aquasecurity/table"
 	"github.com/fatih/color"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/urfave/cli/v2"
 )
 
@@ -263,10 +263,8 @@ func main() {
 					config := config.Parse(config.CONFIG_FILE)
 					cmd := command.NewVersion(config.Migration)
 
-					t := table.NewWriter()
-					t.SetOutputMirror(os.Stdout)
-					t.SetStyle(table.StyleLight)
-					t.AppendHeader(table.Row{"No", "Connection", "Schema", "File", "Version", "Sync", "Diff"})
+					t := mtable.New(os.Stdout)
+					t.AddHeaders("NO", "CONNECTION", "SCHEMA", "FILE", "VERSION", "SYNC", "DIFF")
 
 					if ctx.NArg() == 2 {
 						db := ctx.Args().Get(0)
@@ -295,9 +293,7 @@ func main() {
 							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
-						t.AppendRows([]table.Row{
-							{1, db, schema, v, version, status, diff},
-						})
+						t.AddRow("1", db, schema, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
 						t.Render()
 
 						return nil
@@ -337,9 +333,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AppendRows([]table.Row{
-								{number, db, k, v, version, status, diff},
-							})
+							t.AddRow(fmt.Sprintf("%d", number), db, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
@@ -380,9 +374,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AppendRows([]table.Row{
-								{number, c, k, v, version, status, diff},
-							})
+							t.AddRow(fmt.Sprintf("%d", number), c, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
@@ -406,9 +398,7 @@ func main() {
 					config := config.Parse(config.CONFIG_FILE)
 					cmd := command.NewCompare(config.Migration)
 
-					t := table.NewWriter()
-					t.SetOutputMirror(os.Stdout)
-					t.SetStyle(table.StyleLight)
+					t := mtable.New(os.Stdout)
 
 					source, ok := config.Migration.Connections[ctx.Args().Get(0)]
 					if !ok {
@@ -421,7 +411,7 @@ func main() {
 					}
 
 					if ctx.NArg() == 3 {
-						t.AppendHeader(table.Row{"No", "Schema", ctx.Args().Get(0), ctx.Args().Get(1), "Sync", "Diff"})
+						t.SetHeaders("NO", "SCHEMA", strings.ToUpper(ctx.Args().Get(0)), strings.ToUpper(ctx.Args().Get(1)), "SYNC", "DIFF")
 
 						schema := ctx.Args().Get(2)
 						_, ok := source.Schemas[schema]
@@ -447,16 +437,14 @@ func main() {
 							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
-						t.AppendRows([]table.Row{
-							{1, schema, vSource, vCompare, status, diff},
-						})
+						t.AddRow("1", schema, fmt.Sprintf("%d", vSource), fmt.Sprintf("%d", vCompare), status, fmt.Sprintf("%d", diff))
 						t.Render()
 
 						return nil
 					}
 
 					number := 1
-					t.AppendHeader(table.Row{"No", "Schema", "File", ctx.Args().Get(0), ctx.Args().Get(1), "Sync", "Diff"})
+					t.SetHeaders("NO", "SCHEMA", "FILE", strings.ToUpper(ctx.Args().Get(0)), strings.ToUpper(ctx.Args().Get(1)), "SYNC", "DIFF")
 					for k := range source.Schemas {
 						for l := range compare.Schemas {
 							if k != l {
@@ -487,9 +475,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AppendRows([]table.Row{
-								{number, k, version, vSource, vCompare, status, diff},
-							})
+							t.AddRow(fmt.Sprintf("%d", number), k, fmt.Sprintf("%d", version), fmt.Sprintf("%d", vSource), fmt.Sprintf("%d", vCompare), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
@@ -501,17 +487,20 @@ func main() {
 				},
 			},
 			{
-				Name:        "detail",
+				Name:        "inspect",
 				Aliases:     []string{"d"},
-				Description: "detail <table> <schema> <db1> [<db2>]",
-				Usage:       "Show detail of table on specific schema",
+				Description: "inspect <table> <schema> <db1> [<db2>]",
+				Usage:       "Inspect table on specific schema",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "dump", Aliases: []string{"d"}},
+				},
 				Action: func(ctx *cli.Context) error {
 					if ctx.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt detail <table> <schema> <db1> [<db2>]")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
-					cmd := command.NewDetail(config.Migration)
+					cmd := command.NewInspect(config.Migration)
 
 					t := mtable.New(os.Stdout)
 
@@ -545,6 +534,42 @@ func main() {
 					t.AddHeaders("NO", "NAME", "DATA TYPE", "NULL?", "DEFAULT", "DATA TYPE", "NULL?", "DEFAULT")
 					t.SetHeaderColSpans(0, 1, 1, 3, 3)
 					t.SetAutoMergeHeaders(true)
+
+					dump := ctx.Bool("dump")
+					if dump {
+						var sql string
+						for k, v := range columns {
+							if v.Table1.DataType == "" {
+								if sql == "" {
+									sql = fmt.Sprintf("ALTER TABLE %s\n", ctx.Args().Get(0))
+								}
+
+								var nullable string
+								if !v.Table2.Nullable {
+									nullable = " NOT NULL"
+								}
+
+								var defaultValue string
+								if v.Table2.DefaultValue != "" {
+									defaultValue = fmt.Sprintf(" default %s", v.Table2.DefaultValue)
+								}
+
+								sql = sql + fmt.Sprintf(db.ADD_COLUMN, k, v.Table2.DataType, nullable, defaultValue)
+							}
+
+							if v.Table2.DataType == "" {
+								if sql == "" {
+									sql = fmt.Sprintf("ALTER TABLE %s\n", ctx.Args().Get(0))
+								}
+
+								sql = sql + fmt.Sprintf(db.REMOVE_COLUMN, k)
+							}
+						}
+
+						fmt.Print(sql)
+
+						return nil
+					}
 
 					number := 1
 					for k, v := range columns {
