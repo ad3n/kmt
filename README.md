@@ -64,6 +64,8 @@ Manage postgresql cluster migration easly
 
 - `kmt compare <db1> <db2>` to compare migration from databases
 
+- `kmt inspect <table> <schema> <db1> [<db2>]` to inspect table on specific schema
+
 - `kmt make <schema> <source> <destination>` to make `schema` on `destination` has same version with the `source`
 
 - `kmt test` to test configuration

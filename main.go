@@ -12,7 +12,7 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 	"github.com/ad3n/kmt/v2/pkg/db"
 
-	mtable "github.com/aquasecurity/table"
+	"github.com/aquasecurity/table"
 	"github.com/fatih/color"
 	"github.com/urfave/cli/v2"
 )
@@ -263,7 +263,7 @@ func main() {
 					config := config.Parse(config.CONFIG_FILE)
 					cmd := command.NewVersion(config.Migration)
 
-					t := mtable.New(os.Stdout)
+					t := table.New(os.Stdout)
 					t.AddHeaders("NO", "CONNECTION", "SCHEMA", "FILE", "VERSION", "SYNC", "DIFF")
 
 					if ctx.NArg() == 2 {
@@ -398,7 +398,7 @@ func main() {
 					config := config.Parse(config.CONFIG_FILE)
 					cmd := command.NewCompare(config.Migration)
 
-					t := mtable.New(os.Stdout)
+					t := table.New(os.Stdout)
 
 					source, ok := config.Migration.Connections[ctx.Args().Get(0)]
 					if !ok {
@@ -502,7 +502,7 @@ func main() {
 					config := config.Parse(config.CONFIG_FILE)
 					cmd := command.NewInspect(config.Migration)
 
-					t := mtable.New(os.Stdout)
+					t := table.New(os.Stdout)
 
 					if ctx.NArg() == 3 {
 						columns := cmd.Describe(ctx.Args().Get(0), ctx.Args().Get(1), ctx.Args().Get(2))
