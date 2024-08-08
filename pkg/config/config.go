@@ -94,6 +94,8 @@ func Parse(path string) Config {
 				v["excludes"] = []string{}
 			}
 
+			v["excludes"] = append(v["excludes"], "schema_migrations")
+
 			_, ok = v["with_data"]
 			if !ok {
 				v["with_data"] = []string{}

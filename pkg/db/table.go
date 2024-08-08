@@ -74,7 +74,6 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 		"--no-publications",
 		"--no-security-labels",
 		"--no-subscriptions",
-		"--no-synchronized-snapshots",
 		"--no-tablespaces",
 		"--no-unlogged-table-data",
 		"--no-owner",
