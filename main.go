@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -14,15 +15,14 @@ import (
 
 	"github.com/aquasecurity/table"
 	"github.com/fatih/color"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 )
 
 func main() {
-	app := &cli.App{
+	app := &cli.Command{
 		Name:                   "kmt",
 		Usage:                  "Kejawen Migration Tool (KMT)",
 		Description:            "kmt help",
-		EnableBashCompletion:   true,
 		UseShortOptionHandling: true,
 		Commands: []*cli.Command{
 			{
@@ -30,28 +30,28 @@ func main() {
 				Aliases:     []string{"sy"},
 				Description: "sync <cluster> <schema>",
 				Usage:       "Set the cluster to latest version",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 2 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt sync <cluster> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 
-					return command.NewSync(config.Migration).Run(ctx.Args().Get(0), ctx.Args().Get(1))
+					return command.NewSync(config.Migration).Run(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
 				Name:        "up",
 				Description: "up <db> <schema>",
 				Usage:       "Migration up",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 2 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt up <db> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 
-					return command.NewUp(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1))
+					return command.NewUp(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -59,14 +59,14 @@ func main() {
 				Aliases:     []string{"mk"},
 				Description: "make <schema> <source> <destination>",
 				Usage:       "Make schema on the destination has same version with the source",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 3 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt make <schema> <source> <destination>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 
-					return command.NewCopy(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1), ctx.Args().Get(2))
+					return command.NewCopy(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2))
 				},
 			},
 			{
@@ -74,22 +74,22 @@ func main() {
 				Aliases:     []string{"rb"},
 				Description: "rollback <db> <schema> <step>",
 				Usage:       "Migration rollback",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 3 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt rollback <db> <schema> <step>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 					errorColor := color.New(color.FgRed)
 
-					n, err := strconv.ParseInt(ctx.Args().Get(2), 10, 0)
+					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
 						errorColor.Println("Step is not number")
 
 						return nil
 					}
 
-					return command.NewRollback(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1), int(n))
+					return command.NewRollback(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -97,22 +97,22 @@ func main() {
 				Aliases:     []string{"rn"},
 				Description: "run <db> <schema> <step>",
 				Usage:       "Run migration for n steps",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 3 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt run <db> <schema> <step>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 					errorColor := color.New(color.FgRed)
 
-					n, err := strconv.ParseInt(ctx.Args().Get(2), 10, 0)
+					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
 						errorColor.Println("Step is not number")
 
 						return nil
 					}
 
-					return command.NewRun(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1), int(n))
+					return command.NewRun(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -120,22 +120,22 @@ func main() {
 				Aliases:     []string{"st"},
 				Description: "set <db> <schema> <version>",
 				Usage:       "Set migration to specific version",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 3 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt set <db> <schema> <version>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 					errorColor := color.New(color.FgRed)
 
-					n, err := strconv.ParseInt(ctx.Args().Get(2), 10, 0)
+					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
 						errorColor.Println("Version is not number")
 
 						return nil
 					}
 
-					return command.NewSet(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1), int(n))
+					return command.NewSet(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -143,22 +143,22 @@ func main() {
 				Aliases:     []string{"mg"},
 				Description: "migrate <db> <schema> <version>",
 				Usage:       "Migrate schema to specific version",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 3 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt migrate <db> <schema> <version>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 					errorColor := color.New(color.FgRed)
 
-					n, err := strconv.ParseInt(ctx.Args().Get(2), 10, 0)
+					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
 						errorColor.Println("Version is not number")
 
 						return nil
 					}
 
-					return command.NewMigrate(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1), int(n))
+					return command.NewMigrate(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -166,14 +166,14 @@ func main() {
 				Aliases:     []string{"dw"},
 				Description: "down <db> <schema>",
 				Usage:       "Migration down",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 2 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt down <db> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 
-					return command.NewDown(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1))
+					return command.NewDown(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -181,14 +181,14 @@ func main() {
 				Aliases:     []string{"dp"},
 				Description: "drop <db> <schema>",
 				Usage:       "Drop migration",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 2 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt drop <db> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 
-					return command.NewDrop(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1))
+					return command.NewDrop(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -196,14 +196,14 @@ func main() {
 				Aliases:     []string{"cl"},
 				Description: "clean <db> <schema>",
 				Usage:       "Clean dirty migration",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 2 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt clean <db> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 
-					return command.NewClean(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1))
+					return command.NewClean(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -211,14 +211,14 @@ func main() {
 				Aliases:     []string{"cr"},
 				Description: "create <schema> <name>",
 				Usage:       "Create new migration files for schema",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() != 2 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt create <schema> <name>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
 
-					return command.NewCreate(config.Migration).Call(ctx.Args().Get(0), ctx.Args().Get(1))
+					return command.NewCreate(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -226,7 +226,7 @@ func main() {
 				Aliases:     []string{"gn"},
 				Description: "generate [<schema>]",
 				Usage:       "Generate migrations from existing database (reverse migration)",
-				Action: func(ctx *cli.Context) error {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg := config.Parse(config.CONFIG_FILE)
 					source, ok := cfg.Migration.Connections[cfg.Migration.Source]
 					if !ok {
@@ -238,13 +238,13 @@ func main() {
 						return err
 					}
 
-					cmd := command.NewGenerate(cfg.Migration, db)
-					if ctx.NArg() == 1 {
-						return cmd.Call(ctx.Args().Get(0))
+					cmdGenerate := command.NewGenerate(cfg.Migration, db)
+					if cmd.NArg() == 1 {
+						return cmdGenerate.Call(cmd.Args().Get(0))
 					}
 
 					for k := range source.Schemas {
-						cmd.Call(k)
+						cmdGenerate.Call(k)
 					}
 
 					return nil
@@ -255,21 +255,21 @@ func main() {
 				Aliases:     []string{"v"},
 				Description: "version <db>/<cluster> [<schema>]",
 				Usage:       "Show migration version",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() < 1 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() < 1 {
 						return errors.New("not enough arguments. Usage: kmt version <db>/<cluster> [<schema>]")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
-					cmd := command.NewVersion(config.Migration)
+					cmdVersion := command.NewVersion(config.Migration)
 
 					t := table.New(os.Stdout)
 					t.AddHeaders("NO", "CONNECTION", "SCHEMA", "FILE", "VERSION", "SYNC", "DIFF")
 
-					if ctx.NArg() == 2 {
-						db := ctx.Args().Get(0)
-						schema := ctx.Args().Get(1)
-						version, diff := cmd.Call(db, schema)
+					if cmd.NArg() == 2 {
+						db := cmd.Args().Get(0)
+						schema := cmd.Args().Get(1)
+						version, diff := cmdVersion.Call(db, schema)
 						if version == 0 {
 							return nil
 						}
@@ -300,7 +300,7 @@ func main() {
 					}
 
 					number := 1
-					db := ctx.Args().Get(0)
+					db := cmd.Args().Get(0)
 					clusters, ok := config.Migration.Clusters[db]
 					if !ok {
 						source, ok := config.Migration.Connections[db]
@@ -309,7 +309,7 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							version, diff := cmd.Call(db, k)
+							version, diff := cmdVersion.Call(db, k)
 							if version == 0 {
 								return nil
 							}
@@ -350,7 +350,7 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							version, diff := cmd.Call(c, k)
+							version, diff := cmdVersion.Call(c, k)
 							if version == 0 {
 								return nil
 							}
@@ -390,41 +390,41 @@ func main() {
 				Aliases:     []string{"c"},
 				Description: "compare <source> <compare> [<schema>]",
 				Usage:       "Compare migration from dbs",
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() < 2 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() < 2 {
 						return errors.New("not enough arguments. Usage: kmt compare <source> <compare> [<schema>]")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
-					cmd := command.NewCompare(config.Migration)
+					cmdCompare := command.NewCompare(config.Migration)
 
 					t := table.New(os.Stdout)
 
-					source, ok := config.Migration.Connections[ctx.Args().Get(0)]
+					source, ok := config.Migration.Connections[cmd.Args().Get(0)]
 					if !ok {
-						return fmt.Errorf("connection '%s' not found", ctx.Args().Get(0))
+						return fmt.Errorf("connection '%s' not found", cmd.Args().Get(0))
 					}
 
-					compare, ok := config.Migration.Connections[ctx.Args().Get(1)]
+					compare, ok := config.Migration.Connections[cmd.Args().Get(1)]
 					if !ok {
-						return fmt.Errorf("connection '%s' not found", ctx.Args().Get(1))
+						return fmt.Errorf("connection '%s' not found", cmd.Args().Get(1))
 					}
 
-					if ctx.NArg() == 3 {
-						t.SetHeaders("NO", "SCHEMA", strings.ToUpper(ctx.Args().Get(0)), strings.ToUpper(ctx.Args().Get(1)), "SYNC", "DIFF")
+					if cmd.NArg() == 3 {
+						t.SetHeaders("NO", "SCHEMA", strings.ToUpper(cmd.Args().Get(0)), strings.ToUpper(cmd.Args().Get(1)), "SYNC", "DIFF")
 
-						schema := ctx.Args().Get(2)
+						schema := cmd.Args().Get(2)
 						_, ok := source.Schemas[schema]
 						if !ok {
-							return fmt.Errorf("schema '%s' not found on %s", schema, ctx.Args().Get(0))
+							return fmt.Errorf("schema '%s' not found on %s", schema, cmd.Args().Get(0))
 						}
 
 						_, ok = compare.Schemas[schema]
 						if !ok {
-							return fmt.Errorf("schema '%s' not found on %s", schema, ctx.Args().Get(1))
+							return fmt.Errorf("schema '%s' not found on %s", schema, cmd.Args().Get(1))
 						}
 
-						vSource, vCompare, diff := cmd.Call(ctx.Args().Get(0), ctx.Args().Get(1), schema)
+						vSource, vCompare, diff := cmdCompare.Call(cmd.Args().Get(0), cmd.Args().Get(1), schema)
 						if vSource == 0 {
 							return nil
 						}
@@ -444,14 +444,14 @@ func main() {
 					}
 
 					number := 1
-					t.SetHeaders("NO", "SCHEMA", "FILE", strings.ToUpper(ctx.Args().Get(0)), strings.ToUpper(ctx.Args().Get(1)), "SYNC", "DIFF")
+					t.SetHeaders("NO", "SCHEMA", "FILE", strings.ToUpper(cmd.Args().Get(0)), strings.ToUpper(cmd.Args().Get(1)), "SYNC", "DIFF")
 					for k := range source.Schemas {
 						for l := range compare.Schemas {
 							if k != l {
 								continue
 							}
 
-							vSource, vCompare, diff := cmd.Call(ctx.Args().Get(0), ctx.Args().Get(1), k)
+							vSource, vCompare, diff := cmdCompare.Call(cmd.Args().Get(0), cmd.Args().Get(1), k)
 							if vSource == 0 {
 								return nil
 							}
@@ -494,18 +494,18 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "dump", Aliases: []string{"d"}},
 				},
-				Action: func(ctx *cli.Context) error {
-					if ctx.NArg() < 3 {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt detail <table> <schema> <db1> [<db2>]")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
-					cmd := command.NewInspect(config.Migration)
+					cmdInspect := command.NewInspect(config.Migration)
 
 					t := table.New(os.Stdout)
 
-					if ctx.NArg() == 3 {
-						columns := cmd.Describe(ctx.Args().Get(0), ctx.Args().Get(1), ctx.Args().Get(2))
+					if cmd.NArg() == 3 {
+						columns := cmdInspect.Describe(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2))
 
 						t.AddHeaders("NO", "NAME", "DATA TYPE", "NULL?", "DEFAULT")
 
@@ -528,20 +528,20 @@ func main() {
 						return nil
 					}
 
-					columns := cmd.Compare(ctx.Args().Get(0), ctx.Args().Get(1), ctx.Args().Get(2), ctx.Args().Get(3))
+					columns := cmdInspect.Compare(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2), cmd.Args().Get(3))
 
-					t.SetHeaders("NO", "NAME", strings.ToUpper(ctx.Args().Get(2)), strings.ToUpper(ctx.Args().Get(3)))
+					t.SetHeaders("NO", "NAME", strings.ToUpper(cmd.Args().Get(2)), strings.ToUpper(cmd.Args().Get(3)))
 					t.AddHeaders("NO", "NAME", "DATA TYPE", "NULL?", "DEFAULT", "DATA TYPE", "NULL?", "DEFAULT")
 					t.SetHeaderColSpans(0, 1, 1, 3, 3)
 					t.SetAutoMergeHeaders(true)
 
-					dump := ctx.Bool("dump")
+					dump := cmd.Bool("dump")
 					if dump {
 						var sql string
 						for k, v := range columns {
 							if v.Table1.DataType == "" {
 								if sql == "" {
-									sql = fmt.Sprintf("ALTER TABLE %s\n", ctx.Args().Get(0))
+									sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
 								}
 
 								var nullable string
@@ -559,7 +559,7 @@ func main() {
 
 							if v.Table2.DataType == "" {
 								if sql == "" {
-									sql = fmt.Sprintf("ALTER TABLE %s\n", ctx.Args().Get(0))
+									sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
 								}
 
 								sql = sql + fmt.Sprintf(db.REMOVE_COLUMN, k)
@@ -612,7 +612,7 @@ func main() {
 				Aliases:     []string{"t"},
 				Description: "test",
 				Usage:       "Test kmt configuration",
-				Action: func(ctx *cli.Context) error {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
 					config := config.Parse(config.CONFIG_FILE)
 
 					return command.NewTest(config.Migration).Call()
@@ -623,7 +623,7 @@ func main() {
 				Aliases:     []string{"u"},
 				Description: "upgrade",
 				Usage:       "Upgrade kmt to latest version",
-				Action: func(ctx *cli.Context) error {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return command.NewUpgrade().Call()
 				},
 			},
@@ -632,7 +632,7 @@ func main() {
 				Aliases:     []string{"a"},
 				Description: "about",
 				Usage:       "Show kmt profile",
-				Action: func(ctx *cli.Context) error {
+				Action: func(ctx context.Context, cmd *cli.Command) error {
 					gColor := color.New(color.FgGreen)
 					bColor := color.New(color.Bold)
 
@@ -645,7 +645,7 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
