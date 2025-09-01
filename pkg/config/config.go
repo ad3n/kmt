@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -17,7 +18,6 @@ import (
 
 type (
 	Config struct {
-		Version   string    `yaml:"version"`
 		Migration Migration `yaml:"migration"`
 	}
 
@@ -36,11 +36,19 @@ type (
 		User     string                         `yaml:"user"`
 		Password string                         `yaml:"password"`
 		Schemas  map[string]map[string][]string `yaml:"schemas"`
+		Options  map[string]string              `yaml:"options"`
 	}
 )
 
 func NewConnection(database Connection) (*sql.DB, error) {
-	return sql.Open("postgres", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", database.Host, database.Port, database.User, database.Password, database.Name))
+	options := strings.Builder{}
+	for k, v := range database.Options {
+		options.WriteString(k)
+		options.WriteString("=")
+		options.WriteString(v)
+	}
+
+	return sql.Open("postgres", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, options.String()))
 }
 
 func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migrate {

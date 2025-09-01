@@ -42,11 +42,11 @@ func main() {
 			},
 			{
 				Name:        "up",
-				Description: "up <db> <schema>",
+				Description: "up <connection> <schema>",
 				Usage:       "Migration up",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
-						return errors.New("not enough arguments. Usage: kmt up <db> <schema>")
+						return errors.New("not enough arguments. Usage: kmt up <connection> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -72,11 +72,11 @@ func main() {
 			{
 				Name:        "rollback",
 				Aliases:     []string{"rb"},
-				Description: "rollback <db> <schema> <step>",
+				Description: "rollback <connection> <schema> <step>",
 				Usage:       "Migration rollback",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
-						return errors.New("not enough arguments. Usage: kmt rollback <db> <schema> <step>")
+						return errors.New("not enough arguments. Usage: kmt rollback <connection> <schema> <step>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -95,11 +95,11 @@ func main() {
 			{
 				Name:        "run",
 				Aliases:     []string{"rn"},
-				Description: "run <db> <schema> <step>",
+				Description: "run <connection> <schema> <step>",
 				Usage:       "Run migration for n steps",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
-						return errors.New("not enough arguments. Usage: kmt run <db> <schema> <step>")
+						return errors.New("not enough arguments. Usage: kmt run <connection> <schema> <step>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -118,11 +118,11 @@ func main() {
 			{
 				Name:        "set",
 				Aliases:     []string{"st"},
-				Description: "set <db> <schema> <version>",
+				Description: "set <connection> <schema> <version>",
 				Usage:       "Set migration to specific version",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
-						return errors.New("not enough arguments. Usage: kmt set <db> <schema> <version>")
+						return errors.New("not enough arguments. Usage: kmt set <connection> <schema> <version>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -141,11 +141,11 @@ func main() {
 			{
 				Name:        "migrate",
 				Aliases:     []string{"mg"},
-				Description: "migrate <db> <schema> <version>",
+				Description: "migrate <connection> <schema> <version>",
 				Usage:       "Migrate schema to specific version",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
-						return errors.New("not enough arguments. Usage: kmt migrate <db> <schema> <version>")
+						return errors.New("not enough arguments. Usage: kmt migrate <connection> <schema> <version>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -164,11 +164,11 @@ func main() {
 			{
 				Name:        "down",
 				Aliases:     []string{"dw"},
-				Description: "down <db> <schema>",
+				Description: "down <connection> <schema>",
 				Usage:       "Migration down",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
-						return errors.New("not enough arguments. Usage: kmt down <db> <schema>")
+						return errors.New("not enough arguments. Usage: kmt down <connection> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -179,11 +179,11 @@ func main() {
 			{
 				Name:        "drop",
 				Aliases:     []string{"dp"},
-				Description: "drop <db> <schema>",
+				Description: "drop <connection> <schema>",
 				Usage:       "Drop migration",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
-						return errors.New("not enough arguments. Usage: kmt drop <db> <schema>")
+						return errors.New("not enough arguments. Usage: kmt drop <connection> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -194,11 +194,11 @@ func main() {
 			{
 				Name:        "clean",
 				Aliases:     []string{"cl"},
-				Description: "clean <db> <schema>",
+				Description: "clean <connection> <schema>",
 				Usage:       "Clean dirty migration",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
-						return errors.New("not enough arguments. Usage: kmt clean <db> <schema>")
+						return errors.New("not enough arguments. Usage: kmt clean <connection> <schema>")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -253,11 +253,11 @@ func main() {
 			{
 				Name:        "version",
 				Aliases:     []string{"v"},
-				Description: "version <db>/<cluster> [<schema>]",
+				Description: "version <connection>/<cluster> [<schema>]",
 				Usage:       "Show migration version",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 1 {
-						return errors.New("not enough arguments. Usage: kmt version <db>/<cluster> [<schema>]")
+						return errors.New("not enough arguments. Usage: kmt version <connection>/<cluster> [<schema>]")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)
@@ -489,14 +489,14 @@ func main() {
 			{
 				Name:        "inspect",
 				Aliases:     []string{"d"},
-				Description: "inspect <table> <schema> <db1> [<db2>]",
+				Description: "inspect <table> <schema> <connection1> [<connection>]",
 				Usage:       "Inspect table on specific schema",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "dump", Aliases: []string{"d"}},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 3 {
-						return errors.New("not enough arguments. Usage: kmt detail <table> <schema> <db1> [<db2>]")
+						return errors.New("not enough arguments. Usage: kmt detail <table> <schema> <connection1> [<connection>]")
 					}
 
 					config := config.Parse(config.CONFIG_FILE)

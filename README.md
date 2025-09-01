@@ -6,7 +6,7 @@ Manage postgresql cluster migration easly
 
 - Postgresql 9.5 or above
 
-- Go 1.16 or above
+- Go 1.24 or above
 
 - `pg_dump` (optional) to support reverse migration
 
@@ -44,29 +44,29 @@ Manage postgresql cluster migration easly
 
 - `kmt create <schema> <name>` to create new migration file
 
-- `kmt up <db> <schema>` to deploy migration(s) from database and schema
+- `kmt up <connection> <schema>` to deploy migration(s) from database and schema
 
-- `kmt down <db> <schema>` to drop migration(s) from database and schema
+- `kmt down <connection> <schema>` to drop migration(s) from database and schema
 
 - `kmt generate <schema>` to reverse migration from your `source` database
 
-- `kmt rollback <db> <schema> <step>` to rollback migration version from database and schema
+- `kmt rollback <connection> <schema> <step>` to rollback migration version from database and schema
 
-- `kmt run <db> <schema> <step>` to run migration version from database and schema
+- `kmt run <connection> <schema> <step>` to run migration version from database and schema
 
 - `kmt sync <cluster> <schema>` to sync migration in cluster for schema
 
-- `kmt set <db> <schema>` to set migration to specific version
+- `kmt set <connection> <schema> <version>` to set migration to specific version
 
-- `kmt clean <db> <schema>` to clean migration on database and schema
+- `kmt clean <connection> <schema>` to clean migration on database and schema
 
-- `kmt version <db> <schema>` to show migration version on database and schema
+- `kmt version <connection> <schema>` to show migration version on database and schema
 
-- `kmt compare <db1> <db2>` to compare migration from databases
+- `kmt compare <connection1> <connection2>` to compare migration from databases
 
-- `kmt inspect <table> <schema> <db1> [<db2>]` to inspect table on specific schema
+- `kmt inspect <table> <schema> <connection1> [<connection2>]` to inspect table on specific schema
 
-- `kmt make <schema> <source> <destination>` to make `schema` on `destination` has same version with the `source`
+- `kmt make <schema> <connection_source> <connection_destination>` to make `schema` on `destination` has same version with the `source`
 
 - `kmt test` to test configuration
 
@@ -83,8 +83,6 @@ Run `kmt help` for complete commands
 - Copy Kmtfile.yml below
 
 ```yaml
-version: 1.0
-
 migration:
     pg_dump: /usr/bin/pg_dump
     folder: migrations
