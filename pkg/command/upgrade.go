@@ -131,7 +131,7 @@ func (u upgrade) Call() error {
 	cmd.Dir = wd
 	_ = cmd.Run()
 
-	cmd = exec.Command("go", "build", "-o", "kmt")
+	cmd = exec.Command("go", "build", "-buildvcs=false", "-o", "kmt")
 	cmd.Dir = wd
 	output, err := cmd.CombinedOutput()
 	if err != nil {
