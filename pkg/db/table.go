@@ -208,23 +208,20 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 	}
 
 	return Ddl{
-		Name: strings.Replace(name, ".", "_", -1),
+		Name: strings.ReplaceAll(name, ".", "_"),
 		Definition: Migration{
-			UpScript: strings.Replace(
-				strings.Replace(
-					strings.Replace(
+			UpScript: strings.ReplaceAll(
+				strings.ReplaceAll(
+					strings.ReplaceAll(
 						upScript.String(),
 						CREATE_TABLE,
 						SECURE_CREATE_TABLE,
-						-1,
 					),
 					CREATE_SEQUENCE,
 					SECURE_CREATE_SEQUENCE,
-					-1,
 				),
 				CREATE_INDEX,
 				SECURE_CREATE_INDEX,
-				-1,
 			),
 			DownScript: downScript.String(),
 		},
