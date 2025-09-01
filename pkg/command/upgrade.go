@@ -168,7 +168,7 @@ func (u upgrade) Call() error {
 	}
 
 	progress.Stop()
-	u.successColor.Printf("KMT has been upgraded to %s\n", u.boldFont.Sprint(latest))
+	u.successColor.Printf("KMT has been upgraded to %s\n", u.boldFont.Sprint(latest.Name))
 
 	os.RemoveAll(wd)
 
