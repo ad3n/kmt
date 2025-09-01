@@ -294,7 +294,7 @@ func (Table) downForeignkey(line string) bool {
 }
 
 func (Table) foreignScript(line string) bool {
-	return strings.Contains(line, FOREIGN_KEY)
+	return strings.Contains(line, FOREIGN_KEY) || strings.Contains(line, ADD_CONSTRAINT)
 }
 
 func (Table) refereceScript(line string, n int, lines []string) bool {
