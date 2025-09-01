@@ -145,11 +145,13 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 		}
 
 		if t.refereceScript(line, n, lines) {
-			if t.foreignScript(lines[n+1], n, lines) {
+			if t.foreignScript(lines[n+1]) {
 				upForeignScript.WriteString(line)
 				upForeignScript.WriteString("\n")
 				upForeignScript.WriteString(lines[n+1])
 				upForeignScript.WriteString("\n")
+
+				skip = true
 
 				continue
 			}
@@ -293,8 +295,8 @@ func (Table) downForeignkey(line string) bool {
 	return regex.MatchString(line)
 }
 
-func (Table) foreignScript(line string, n int, lines []string) bool {
-	return strings.Contains(line, FOREIGN_KEY) || (strings.Contains(lines[n], ALTER_TABLE) && strings.Contains(line, ADD_CONSTRAINT))
+func (Table) foreignScript(line string) bool {
+	return strings.Contains(line, FOREIGN_KEY)
 }
 
 func (Table) refereceScript(line string, n int, lines []string) bool {
