@@ -46,9 +46,10 @@ func NewConnection(database Connection) (*sql.DB, error) {
 		options.WriteString(k)
 		options.WriteString("=")
 		options.WriteString(v)
+		options.WriteString(" ")
 	}
 
-	return sql.Open("postgres", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, options.String()))
+	return sql.Open("postgres", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, strings.TrimRight(options.String(), " ")))
 }
 
 func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migrate {
