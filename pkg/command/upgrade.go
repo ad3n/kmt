@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,15 +13,23 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/plumbing"
 )
 
-type upgrade struct {
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
-}
+type (
+	upgrade struct {
+		boldFont     *color.Color
+		errorColor   *color.Color
+		successColor *color.Color
+	}
+
+	tagInfo struct {
+		Name      string
+		Hash      plumbing.Hash
+		Timestamp time.Time
+	}
+)
 
 func NewUpgrade() upgrade {
 	return upgrade{
@@ -39,7 +48,7 @@ func (u upgrade) Call() error {
 	progress.Suffix = " Checking new update... "
 	progress.Start()
 
-	repository, err := git.PlainClone(wd, false, &git.CloneOptions{
+	repository, err := git.PlainClone(wd, &git.CloneOptions{
 		URL:   config.REPOSITORY,
 		Depth: 1,
 	})
@@ -50,27 +59,53 @@ func (u upgrade) Call() error {
 		return nil
 	}
 
-	var latest string
-	var when = time.Now().AddDate(-3, 0, 0)
+	var tagsList []tagInfo
 
-	tags, err := repository.TagObjects()
+	tags, err := repository.Tags()
 	if err != nil {
 		progress.Stop()
+
 		u.errorColor.Println(err)
 
 		return nil
 	}
 
-	_ = tags.ForEach(func(t *object.Tag) error {
-		if when.Before(t.Tagger.When) {
-			when = t.Tagger.When
-			latest = t.Name
+	_ = tags.ForEach(func(t *plumbing.Reference) error {
+		tag, err := repository.TagObject(t.Hash())
+		if err == nil {
+			tagsList = append(tagsList, tagInfo{
+				Name:      t.Name().Short(),
+				Hash:      tag.Target,
+				Timestamp: tag.Tagger.When,
+			})
+
+			return nil
+		}
+
+		commit, err := repository.CommitObject(t.Hash())
+		if err == nil {
+			tagsList = append(tagsList, tagInfo{
+				Name:      t.Name().Short(),
+				Hash:      commit.Hash,
+				Timestamp: commit.Committer.When,
+			})
 		}
 
 		return nil
 	})
 
-	if latest == config.VERSION_STRING {
+	sort.Slice(tagsList, func(i, j int) bool {
+		return tagsList[i].Timestamp.After(tagsList[j].Timestamp)
+	})
+
+	if len(tagsList) == 0 {
+		progress.Stop()
+		u.successColor.Println("KMT is already up to date")
+
+	}
+
+	latest := tagsList[0]
+	if latest.Name == config.VERSION_STRING {
 		progress.Stop()
 		u.successColor.Println("KMT is already up to date")
 
@@ -82,7 +117,7 @@ func (u upgrade) Call() error {
 	progress.Suffix = " Updating KMT... "
 	progress.Start()
 
-	cmd := exec.Command("git", "checkout", latest)
+	cmd := exec.Command("git", "checkout", latest.Name)
 	cmd.Dir = wd
 	err = cmd.Run()
 	if err != nil {

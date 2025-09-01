@@ -3,3 +3,6 @@ tasks:
   update:
     cmds:
       - go get -u ./...
+  run:
+    cmds:
+      - go run main.go {{.CLI_ARGS}}
