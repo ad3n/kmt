@@ -102,6 +102,8 @@ migration:
             name: database
             user: user
             password: s3cret
+            options:
+                sslmode: disable
             schemas:
                 public:
                     excludes:
