@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type (
@@ -49,7 +49,7 @@ func NewConnection(database Connection) (*sql.DB, error) {
 		options.WriteString(" ")
 	}
 
-	return sql.Open("postgres", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, strings.TrimRight(options.String(), " ")))
+	return sql.Open("pgx", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, strings.TrimRight(options.String(), " ")))
 }
 
 func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migrate {
