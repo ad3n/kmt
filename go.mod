@@ -18,7 +18,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
-	github.com/go-git/go-billy/v6 v6.0.0-20250817172114-3a9ca963b728 // indirect
+	github.com/go-git/go-billy/v6 v6.0.0-20250902094905-c2c3cf4b2510 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
