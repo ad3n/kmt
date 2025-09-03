@@ -26,7 +26,6 @@ type (
 
 	tagInfo struct {
 		Name      string
-		Hash      plumbing.Hash
 		Timestamp time.Time
 	}
 )
@@ -75,7 +74,6 @@ func (u upgrade) Call() error {
 		if err == nil {
 			tagsList = append(tagsList, tagInfo{
 				Name:      t.Name().Short(),
-				Hash:      tag.Target,
 				Timestamp: tag.Tagger.When,
 			})
 
@@ -86,7 +84,6 @@ func (u upgrade) Call() error {
 		if err == nil {
 			tagsList = append(tagsList, tagInfo{
 				Name:      t.Name().Short(),
-				Hash:      commit.Hash,
 				Timestamp: commit.Committer.When,
 			})
 		}
@@ -102,6 +99,7 @@ func (u upgrade) Call() error {
 		progress.Stop()
 		u.successColor.Println("KMT is already up to date")
 
+		return nil
 	}
 
 	latest := tagsList[0]
