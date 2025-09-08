@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/fatih/color v1.18.0
-	github.com/go-git/go-git/v6 v6.0.0-20250831162718-34f273445e00
+	github.com/go-git/go-git/v6 v6.0.0-20250906064640-2917a7134436
 	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/urfave/cli/v3 v3.4.1
@@ -23,7 +23,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
-	github.com/go-git/go-billy/v6 v6.0.0-20250902094905-c2c3cf4b2510 // indirect
+	github.com/go-git/go-billy/v6 v6.0.0-20250906064328-0118fd22f1d9 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -41,8 +41,8 @@ require (
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b // indirect
 	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/term v0.34.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/term v0.35.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 )
