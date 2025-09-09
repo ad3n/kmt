@@ -60,8 +60,8 @@ func (t test) Call() error {
 	progress.Suffix = fmt.Sprintf(" Test '%s' command...", t.successColor.Sprint("pg_dump"))
 	progress.Start()
 
-	cli := exec.Command(t.config.PgDump, "--help")
-	err := cli.Start()
+	cli := exec.Command(t.config.PgDump, "--version")
+	err := cli.Run()
 	if err != nil {
 		progress.Stop()
 

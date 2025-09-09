@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"slices"
 	iSync "sync"
 	"time"
 
@@ -165,12 +166,8 @@ func (g generate) Call(schema string) error {
 			progress.Start()
 
 			schemaOnly := true
-			for _, d := range schemaConfig["with_data"] {
-				if d == tableName {
-					schemaOnly = false
-
-					break
-				}
+			if slices.Contains(schemaConfig["with_data"], tableName) {
+				schemaOnly = false
 			}
 
 			wg.Add(1)
