@@ -273,7 +273,15 @@ func (Table) keyValue(line string, name string, between bool) string {
 }
 
 func (Table) skip(line string) bool {
-	return line == "" || strings.HasPrefix(line, "--") || strings.HasPrefix(line, "SET ") || strings.HasPrefix(line, "SELECT ")
+	return line == "" ||
+		strings.HasPrefix(line, "--") ||
+		strings.HasPrefix(line, "SET ") ||
+		strings.HasPrefix(line, "SELECT ") ||
+		strings.HasPrefix(line, "\\connect ") ||
+		strings.HasPrefix(line, "\\copy ") ||
+		strings.HasPrefix(line, "\\restrict ") ||
+		strings.HasPrefix(line, "\\setrestrict ") ||
+		strings.HasPrefix(line, "\\unrestrict ")
 }
 
 func (Table) downScript(line string) bool {
