@@ -193,7 +193,7 @@ func (g generate) Call(schema string) error {
 		close(cDdl)
 	}(version, schema, tTable, cDdl, cTable)
 
-	version = version + int64(tTable*2)
+	version = version + int64(tTable*2) + 1
 	go func(version int64, schema string, cDdl <-chan db.Ddl, cInsert chan<- db.Ddl) {
 		for ddl := range cDdl {
 			cInsert <- ddl
@@ -226,7 +226,7 @@ func (g generate) Call(schema string) error {
 		close(cInsert)
 	}(version, schema, cDdl, cInsert)
 
-	version = version + int64(tTable*2)
+	version = version + int64(tTable*2) + 1
 	for ddl := range cInsert {
 		if ddl.Insert.UpScript == "" {
 			continue
