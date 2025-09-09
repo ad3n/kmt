@@ -3,6 +3,7 @@ tasks:
   update:
     cmds:
       - go get -u ./...
+      - go mod tidy
   run:
     cmds:
       - go run main.go {{.CLI_ARGS}}
