@@ -264,6 +264,9 @@ func main() {
 					cmdVersion := command.NewVersion(config.Migration)
 
 					t := table.New(os.Stdout)
+					t.SetHeaderStyle(table.StyleBold)
+					t.SetLineStyle(table.StyleBrightBlack)
+					t.SetDividers(table.UnicodeRoundedDividers)
 					t.AddHeaders("NO", "CONNECTION", "SCHEMA", "FILE", "VERSION", "SYNC", "DIFF")
 
 					if cmd.NArg() == 2 {
@@ -333,7 +336,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(fmt.Sprintf("%d", number), db, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), db, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
@@ -374,7 +377,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(fmt.Sprintf("%d", number), c, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), c, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
@@ -399,6 +402,9 @@ func main() {
 					cmdCompare := command.NewCompare(config.Migration)
 
 					t := table.New(os.Stdout)
+					t.SetHeaderStyle(table.StyleBold)
+					t.SetLineStyle(table.StyleBrightBlack)
+					t.SetDividers(table.UnicodeRoundedDividers)
 
 					source, ok := config.Migration.Connections[cmd.Args().Get(0)]
 					if !ok {
@@ -475,7 +481,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(fmt.Sprintf("%d", number), k, fmt.Sprintf("%d", version), fmt.Sprintf("%d", vSource), fmt.Sprintf("%d", vCompare), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), k, fmt.Sprintf("%d", version), fmt.Sprintf("%d", vSource), fmt.Sprintf("%d", vCompare), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
