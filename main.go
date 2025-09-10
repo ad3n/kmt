@@ -503,6 +503,9 @@ func main() {
 					cmdInspect := command.NewInspect(config.Migration)
 
 					t := table.New(os.Stdout)
+					t.SetHeaderStyle(table.StyleBold)
+					t.SetLineStyle(table.StyleBrightBlack)
+					t.SetDividers(table.UnicodeRoundedDividers)
 
 					if cmd.NArg() == 3 {
 						columns := cmdInspect.Describe(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2))
@@ -518,7 +521,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(fmt.Sprintf("%d", number), k, v.DataType, status, v.DefaultValue)
+							t.AddRow(color.New(color.Bold).Sprint(number), color.New(color.Bold).Sprint(k), v.DataType, status, v.DefaultValue)
 
 							number++
 						}
@@ -537,6 +540,7 @@ func main() {
 
 					number := 1
 					for k, v := range columns {
+						num := color.New(color.Bold).Sprint(number)
 						if v.Table1.DataType == "" {
 							v.Table1.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
 							v.Table1.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
@@ -551,6 +555,7 @@ func main() {
 							v.Table1.Nullable != v.Table2.Nullable ||
 							v.Table1.DefaultValue != v.Table2.DefaultValue {
 							k = color.New(color.FgRed, color.Bold).Sprint(k)
+							num = color.New(color.FgRed, color.Bold).Sprint(number)
 						}
 
 						var status1 string
@@ -567,7 +572,7 @@ func main() {
 							status2 = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
-						t.AddRow(fmt.Sprintf("%d", number), k, v.Table1.DataType, status1, v.Table1.DefaultValue, v.Table2.DataType, status2, v.Table2.DefaultValue)
+						t.AddRow(num, k, v.Table1.DataType, status1, v.Table1.DefaultValue, v.Table2.DataType, status2, v.Table2.DefaultValue)
 
 						number++
 					}
@@ -605,7 +610,7 @@ func main() {
 							}
 						}
 
-						fmt.Print(sql)
+						color.New(color.FgGreen).Print(sql)
 					}
 
 					return nil
