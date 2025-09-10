@@ -6,10 +6,10 @@ require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/fatih/color v1.18.0
 	github.com/go-git/go-git/v6 v6.0.0-20250908193647-01bdba742d7c
+	github.com/goccy/go-yaml v1.18.0
 	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/urfave/cli/v3 v3.4.1
-	go.yaml.in/yaml/v4 v4.0.0-rc.2
 )
 
 require github.com/klauspost/cpuid/v2 v2.3.0 // indirect
