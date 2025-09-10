@@ -535,6 +535,45 @@ func main() {
 					t.SetHeaderColSpans(0, 1, 1, 3, 3)
 					t.SetAutoMergeHeaders(true)
 
+					number := 1
+					for k, v := range columns {
+						if v.Table1.DataType == "" {
+							v.Table1.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
+							v.Table1.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						if v.Table2.DataType == "" {
+							v.Table2.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
+							v.Table2.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						if v.Table1.DataType != v.Table2.DataType ||
+							v.Table1.Nullable != v.Table2.Nullable ||
+							v.Table1.DefaultValue != v.Table2.DefaultValue {
+							k = color.New(color.FgRed, color.Bold).Sprint(k)
+						}
+
+						var status1 string
+						var status2 string
+						if v.Table1.Nullable {
+							status1 = color.New(color.FgGreen).Sprint("v")
+						} else {
+							status1 = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						if v.Table2.Nullable {
+							status2 = color.New(color.FgGreen).Sprint("v")
+						} else {
+							status2 = color.New(color.FgRed, color.Bold).Sprint("x")
+						}
+
+						t.AddRow(fmt.Sprintf("%d", number), k, v.Table1.DataType, status1, v.Table1.DefaultValue, v.Table2.DataType, status2, v.Table2.DefaultValue)
+
+						number++
+					}
+
+					t.Render()
+
 					dump := cmd.Bool("dump")
 					if dump {
 						var sql string
@@ -567,42 +606,7 @@ func main() {
 						}
 
 						fmt.Print(sql)
-
-						return nil
 					}
-
-					number := 1
-					for k, v := range columns {
-						if v.Table1.DataType == "" {
-							v.Table1.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
-							v.Table1.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
-						}
-
-						if v.Table2.DataType == "" {
-							v.Table2.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
-							v.Table2.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
-						}
-
-						var status1 string
-						var status2 string
-						if v.Table1.Nullable {
-							status1 = color.New(color.FgGreen).Sprint("v")
-						} else {
-							status1 = color.New(color.FgRed, color.Bold).Sprint("x")
-						}
-
-						if v.Table2.Nullable {
-							status2 = color.New(color.FgGreen).Sprint("v")
-						} else {
-							status2 = color.New(color.FgRed, color.Bold).Sprint("x")
-						}
-
-						t.AddRow(fmt.Sprintf("%d", number), k, v.Table1.DataType, status1, v.Table1.DefaultValue, v.Table2.DataType, status2, v.Table2.DefaultValue)
-
-						number++
-					}
-
-					t.Render()
 
 					return nil
 				},
