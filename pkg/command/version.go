@@ -27,26 +27,26 @@ func NewVersion(config config.Migration) version {
 	}
 }
 
-func (v version) Call(source string, schema string) (uint, int) {
+func (v version) Call(source string, schema string) (uint, uint, int) {
 	dbConfig, ok := v.config.Connections[source]
 	if !ok {
 		v.errorColor.Printf("Database connection '%s' not found\n", v.boldFont.Sprint(source))
 
-		return 0, 0
+		return 0, 0, 0
 	}
 
 	_, ok = dbConfig.Schemas[schema]
 	if !ok {
 		v.errorColor.Printf("Schema '%s' not found\n", v.boldFont.Sprint(schema))
 
-		return 0, 0
+		return 0, 0, 0
 	}
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
 		v.errorColor.Println(err.Error())
 
-		return 0, 0
+		return 0, 0, 0
 	}
 
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", v.config.Folder, schema))
@@ -54,14 +54,14 @@ func (v version) Call(source string, schema string) (uint, int) {
 	if err != nil {
 		v.errorColor.Println(err.Error())
 
-		return 0, 0
+		return 0, 0, 0
 	}
 
 	files, err := os.ReadDir(fmt.Sprintf("%s/%s", v.config.Folder, schema))
 	if err != nil {
 		v.errorColor.Println(err.Error())
 
-		return 0, 0
+		return 0, 0, 0
 	}
 
 	tFiles := len(files)
@@ -92,5 +92,5 @@ func (v version) Call(source string, schema string) (uint, int) {
 		number = number * -1
 	}
 
-	return version, number
+	return version, uint(vFile), number
 }

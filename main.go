@@ -272,23 +272,12 @@ func main() {
 					if cmd.NArg() == 2 {
 						db := cmd.Args().Get(0)
 						schema := cmd.Args().Get(1)
-						version, diff := cmdVersion.Call(db, schema)
-						if version == 0 {
+						vDb, vFile, diff := cmdVersion.Call(db, schema)
+						if vDb == 0 || vFile == 0 {
 							return nil
 						}
 
-						files, err := os.ReadDir(fmt.Sprintf("%s/%s", config.Migration.Folder, schema))
-						if err != nil {
-							fmt.Println(err.Error())
-
-							return nil
-						}
-
-						tFiles := len(files)
-						file := strings.Split(files[tFiles-1].Name(), "_")
-						v, _ := strconv.Atoi(file[0])
-
-						sync := uint(v) == version
+						sync := vFile == vDb
 						var status string
 						if sync {
 							status = color.New(color.FgGreen).Sprint("v")
@@ -296,7 +285,7 @@ func main() {
 							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
-						t.AddRow("1", db, schema, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
+						t.AddRow("1", db, schema, fmt.Sprintf("%d", vFile), fmt.Sprintf("%d", vDb), status, fmt.Sprintf("%d", diff))
 						t.Render()
 
 						return nil
@@ -312,23 +301,12 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							version, diff := cmdVersion.Call(db, k)
-							if version == 0 {
+							vDb, vFile, diff := cmdVersion.Call(db, k)
+							if vDb == 0 || vFile == 0 {
 								return nil
 							}
 
-							files, err := os.ReadDir(fmt.Sprintf("%s/%s", config.Migration.Folder, k))
-							if err != nil {
-								fmt.Println(err.Error())
-
-								return nil
-							}
-
-							tFiles := len(files)
-							file := strings.Split(files[tFiles-1].Name(), "_")
-							v, _ := strconv.Atoi(file[0])
-
-							sync := uint(v) == version
+							sync := vFile == vDb
 							var status string
 							if sync {
 								status = color.New(color.FgGreen).Sprint("v")
@@ -336,7 +314,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(color.New(color.Bold).Sprint(number), db, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), db, k, fmt.Sprintf("%d", vFile), fmt.Sprintf("%d", vDb), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
@@ -353,23 +331,12 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							version, diff := cmdVersion.Call(c, k)
-							if version == 0 {
+							vDb, vFile, diff := cmdVersion.Call(c, k)
+							if vDb == 0 || vFile == 0 {
 								return nil
 							}
 
-							files, err := os.ReadDir(fmt.Sprintf("%s/%s", config.Migration.Folder, k))
-							if err != nil {
-								fmt.Println(err.Error())
-
-								return nil
-							}
-
-							tFiles := len(files)
-							file := strings.Split(files[tFiles-1].Name(), "_")
-							v, _ := strconv.Atoi(file[0])
-
-							sync := uint(v) == version
+							sync := vFile == vDb
 							var status string
 							if sync {
 								status = color.New(color.FgGreen).Sprint("v")
@@ -377,7 +344,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(color.New(color.Bold).Sprint(number), c, k, fmt.Sprintf("%d", v), fmt.Sprintf("%d", version), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), c, k, fmt.Sprintf("%d", vFile), fmt.Sprintf("%d", vDb), status, fmt.Sprintf("%d", diff))
 
 							number++
 						}
