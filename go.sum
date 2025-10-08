@@ -68,6 +68,8 @@ github.com/go-git/go-git/v6 v6.0.0-20250917085037-6e57f9e4da1e h1:Cp8YJWVGOaBuwO
 github.com/go-git/go-git/v6 v6.0.0-20250917085037-6e57f9e4da1e/go.mod h1:qikYwcUCOy1+Pq2SPaUmoubCmJ2PT+Lg9ti8sgwtmJg=
 github.com/go-git/go-git/v6 v6.0.0-20250929195514-145daf2492dd h1:30HEd5KKVM7GgMJ1GSNuYxuZXEg8Pdlngp6T51faxoc=
 github.com/go-git/go-git/v6 v6.0.0-20250929195514-145daf2492dd/go.mod h1:lz8PQr/p79XpFq5ODVBwRJu5LnOF8Et7j95ehqmCMJU=
+github.com/go-git/go-git/v6 v6.0.0-20251007095815-706a889a010e h1:xwimocnvvXuvfbxQxwCF9032K6mjxmWsj5WaDl2ollo=
+github.com/go-git/go-git/v6 v6.0.0-20251007095815-706a889a010e/go.mod h1:lz8PQr/p79XpFq5ODVBwRJu5LnOF8Et7j95ehqmCMJU=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
@@ -159,6 +161,8 @@ golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 h1:TQwNpfvNkxAVlItJf6Cr5JTsV
 golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9/go.mod h1:TwQYMMnGpvZyc+JpB/UAuTNIsVJifOlSkrZkhcvpVUk=
 golang.org/x/net v0.44.0 h1:evd8IRDyfNBMBTTY5XRF1vaZlD+EmWx6x8PkhR04H/I=
 golang.org/x/net v0.44.0/go.mod h1:ECOoLqd5U3Lhyeyo/QDCEVQ4sNgYsqvCZ722XogGieY=
+golang.org/x/net v0.45.0 h1:RLBg5JKixCy82FtLJpeNlVM0nrSqpCRYzVU1n8kj0tM=
+golang.org/x/net v0.45.0/go.mod h1:ECOoLqd5U3Lhyeyo/QDCEVQ4sNgYsqvCZ722XogGieY=
 golang.org/x/sync v0.17.0 h1:l60nONMj9l5drqw6jlhIELNv9I0A4OFgRsG9k2oT9Ug=
 golang.org/x/sync v0.17.0/go.mod h1:9KTHXmSnoGruLpwFjVSX0lNNA75CykiMECbovNTZqGI=
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
