@@ -5,11 +5,11 @@ go 1.24.0
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/fatih/color v1.18.0
-	github.com/go-git/go-git/v6 v6.0.0-20251016081807-d8e52ff5acd7
+	github.com/go-git/go-git/v6 v6.0.0-20251021092831-91c33c9361ce
 	github.com/goccy/go-yaml v1.18.0
 	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/jackc/pgx/v5 v5.7.6
-	github.com/urfave/cli/v3 v3.4.1
+	github.com/urfave/cli/v3 v3.5.0
 )
 
 require (
