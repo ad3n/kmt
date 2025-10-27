@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/fatih/color v1.18.0
-	github.com/go-git/go-git/v6 v6.0.0-20251021092831-91c33c9361ce
+	github.com/go-git/go-git/v6 v6.0.0-20251026103747-8aed58b04473
 	github.com/goccy/go-yaml v1.18.0
 	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/jackc/pgx/v5 v5.7.6
@@ -13,7 +13,8 @@ require (
 )
 
 require (
-	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
+	github.com/clipperhouse/stringish v0.1.1 // indirect
+	github.com/clipperhouse/uax29/v2 v2.3.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 )
 
@@ -26,7 +27,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.5.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
-	github.com/go-git/go-billy/v6 v6.0.0-20251016063423-4289a4e54aa4 // indirect
+	github.com/go-git/go-billy/v6 v6.0.0-20251026101908-623011986e70 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
