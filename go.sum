@@ -77,6 +77,8 @@ github.com/go-git/go-billy/v6 v6.0.0-20251103194943-ae9e5d5b5b37 h1:dN1MYlO4eAjC
 github.com/go-git/go-billy/v6 v6.0.0-20251103194943-ae9e5d5b5b37/go.mod h1:6i55TEZIMJza+kjsp8CPZvZKf6bUQ9SEm/nBfUipE+Q=
 github.com/go-git/go-billy/v6 v6.0.0-20251120215217-80673c4ccbfb h1:DMxvYQ9F7gtlhA6bEs3zkynmRxcVN/x4Ere0Q9FLfEo=
 github.com/go-git/go-billy/v6 v6.0.0-20251120215217-80673c4ccbfb/go.mod h1:0NjwVNrwtVFZBReAp5OoGklGJIgJFEbVyHneAr4lc8k=
+github.com/go-git/go-billy/v6 v6.0.0-20251126203821-7f9c95185ee0 h1:eY5aB2GXiVdgTueBcqsBt53WuJTRZAuCdIS/86Pcq5c=
+github.com/go-git/go-billy/v6 v6.0.0-20251126203821-7f9c95185ee0/go.mod h1:0NjwVNrwtVFZBReAp5OoGklGJIgJFEbVyHneAr4lc8k=
 github.com/go-git/go-git-fixtures/v5 v5.1.0 h1:b8cWxDLTk0s09Ihm9x1HvNGUzxUVlRwIH7EAM0gGDKg=
 github.com/go-git/go-git-fixtures/v5 v5.1.0/go.mod h1:CdmU0oQeDuy4Xh8V0i9Ym+vsTkgDDPKEiofBFEVT+aE=
 github.com/go-git/go-git-fixtures/v5 v5.1.1 h1:OH8i1ojV9bWfr0ZfasfpgtUXQHQyVS8HXik/V1C099w=
@@ -106,12 +108,16 @@ github.com/go-git/go-git/v6 v6.0.0-20251103200709-47b1ed2930c9 h1:ku5ebH4vCvEjg1
 github.com/go-git/go-git/v6 v6.0.0-20251103200709-47b1ed2930c9/go.mod h1:z9pQiXCfyOZIs/8qa5zmozzbcsDPtGN91UD7+qeX3hk=
 github.com/go-git/go-git/v6 v6.0.0-20251121083746-39fcec474970 h1:fTBItLbjioU31giAolw2Kfg91P/LmLcXH7stoJSQXLc=
 github.com/go-git/go-git/v6 v6.0.0-20251121083746-39fcec474970/go.mod h1:82JGB4xCU6W8toVHjEcv4KH4GSiB+MhjFTCGQxPOLdM=
+github.com/go-git/go-git/v6 v6.0.0-20251128074608-48f817f57805 h1:jxQ3BzYeErNRvlI/4+0mpwqMzvB4g97U+ksfgvrUEbY=
+github.com/go-git/go-git/v6 v6.0.0-20251128074608-48f817f57805/go.mod h1:dIwT3uWK1ooHInyVnK2JS5VfQ3peVGYaw2QPqX7uFvs=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
 github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
 github.com/goccy/go-yaml v1.18.0 h1:8W7wMFS12Pcas7KU+VVkaiCng+kG8QiFeFwzFb+rwuw=
 github.com/goccy/go-yaml v1.18.0/go.mod h1:XBurs7gK8ATbW4ZPGKgcbrY1Br56PdM69F7LkFRi1kA=
+github.com/goccy/go-yaml v1.19.0 h1:EmkZ9RIsX+Uq4DYFowegAuJo8+xdX3T/2dwNPXbxEYE=
+github.com/goccy/go-yaml v1.19.0/go.mod h1:XBurs7gK8ATbW4ZPGKgcbrY1Br56PdM69F7LkFRi1kA=
 github.com/gogo/protobuf v1.3.2 h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=
 github.com/gogo/protobuf v1.3.2/go.mod h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69NZV8Q=
 github.com/golang-migrate/migrate/v4 v4.19.0 h1:RcjOnCGz3Or6HQYEJ/EEVLfWnmw9KnoigPSjzhCuaSE=
