@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/fatih/color v1.18.0
-	github.com/go-git/go-git/v6 v6.0.0-20251205125627-4aac0c537802
+	github.com/go-git/go-git/v6 v6.0.0-20251206100705-e633db5b9a34
 	github.com/goccy/go-yaml v1.19.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgx/v5 v5.7.6
@@ -27,7 +27,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
-	github.com/go-git/go-billy/v6 v6.0.0-20251204095141-7469ffe06db2 // indirect
+	github.com/go-git/go-billy/v6 v6.0.0-20251206100608-d4862421331a // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
