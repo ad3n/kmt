@@ -22,6 +22,8 @@ github.com/clipperhouse/uax29/v2 v2.3.0 h1:SNdx9DVUqMoBuBoW3iLOj4FQv3dN5mDtuqwuh
 github.com/clipperhouse/uax29/v2 v2.3.0/go.mod h1:Wn1g7MK6OoeDT0vL+Q0SQLDz/KpfsVRgg6W7ihQeh4g=
 github.com/cloudflare/circl v1.6.1 h1:zqIqSPIndyBh1bjLVVDHMPpVKqp8Su/V+6MeDzzQBQ0=
 github.com/cloudflare/circl v1.6.1/go.mod h1:uddAzsPgqdMAYatqJ0lsjX1oECcQLIlRpzZh3pJrofs=
+github.com/cloudflare/circl v1.6.2 h1:hL7VBpHHKzrV5WTfHCaBsgx/HGbBYlgrwvNXEVDYYsQ=
+github.com/cloudflare/circl v1.6.2/go.mod h1:2eXP6Qfat4O/Yhh8BznvKnJ+uzEoTQ6jVKJRn81BiS4=
 github.com/containerd/errdefs v1.0.0 h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI=
 github.com/containerd/errdefs v1.0.0/go.mod h1:+YBYIdtsnF4Iw6nWZhJcqGSg/dwvV7tyJ/kCkyJ2k+M=
 github.com/containerd/errdefs/pkg v0.3.0 h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151Xdx3ZPPE=
@@ -90,6 +92,7 @@ github.com/go-git/go-git-fixtures/v5 v5.1.0/go.mod h1:CdmU0oQeDuy4Xh8V0i9Ym+vsTk
 github.com/go-git/go-git-fixtures/v5 v5.1.1 h1:OH8i1ojV9bWfr0ZfasfpgtUXQHQyVS8HXik/V1C099w=
 github.com/go-git/go-git-fixtures/v5 v5.1.2-0.20251203093322-2d981fbae6b7 h1:f8lec5CHzeDgHKzEBZKD6MwAUeaYDfIT+aCL9bU/TqY=
 github.com/go-git/go-git-fixtures/v5 v5.1.2-0.20251205091929-ed656e84d025 h1:24Uc4y1yxMe8V30NhshaDdCaTOw97BWVhVGH/m1+udM=
+github.com/go-git/go-git-fixtures/v5 v5.1.2-0.20251229094738-4b14af179146 h1:xYfxAopYyL44ot6dMBIb1Z1njFM0ZBQ99HdIB99KxLs=
 github.com/go-git/go-git/v6 v6.0.0-20250908193647-01bdba742d7c h1:MhWelKnwy2JbIxens4S8zumVCJpq4h6jGDm8vcOT+Gc=
 github.com/go-git/go-git/v6 v6.0.0-20250908193647-01bdba742d7c/go.mod h1:qikYwcUCOy1+Pq2SPaUmoubCmJ2PT+Lg9ti8sgwtmJg=
 github.com/go-git/go-git/v6 v6.0.0-20250910120214-3a68d0404116 h1:YtWRF4qTPh9YEh2m6lhaKDQDyErFLp/UfWJC9MjLEvk=
@@ -124,6 +127,8 @@ github.com/go-git/go-git/v6 v6.0.0-20251206100705-e633db5b9a34 h1:zvQHay88dsz9zO
 github.com/go-git/go-git/v6 v6.0.0-20251206100705-e633db5b9a34/go.mod h1:djt5SZ0fMrkORuVAxrZlwtRMw+hnqfZZVqWFH/uQAMI=
 github.com/go-git/go-git/v6 v6.0.0-20251216093047-22c365fcee9c h1:pR4UmnVFMjNw956fgu+JlSAvmx37qW4ttVF0cu7DL/Q=
 github.com/go-git/go-git/v6 v6.0.0-20251216093047-22c365fcee9c/go.mod h1:EPzgAjDnw+TaCt1w/JUmj+SXwWHUae3c078ixiZQ10Y=
+github.com/go-git/go-git/v6 v6.0.0-20251231065035-29ae690a9f19 h1:0lz2eJScP8v5YZQsrEw+ggWC5jNySjg4bIZo5BIh6iI=
+github.com/go-git/go-git/v6 v6.0.0-20251231065035-29ae690a9f19/go.mod h1:L+Evfcs7EdTqxwv854354cb6+++7TFL3hJn3Wy4g+3w=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
@@ -153,6 +158,8 @@ github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 h1:iCEnooe7Ulw
 github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761/go.mod h1:5TJZWKEWniPve33vlWYSoGYefn3gLQRzjfDlhSJ9ZKM=
 github.com/jackc/pgx/v5 v5.7.6 h1:rWQc5FwZSPX58r1OQmkuaNicxdmExaEz5A2DO2hUuTk=
 github.com/jackc/pgx/v5 v5.7.6/go.mod h1:aruU7o91Tc2q2cFp5h4uP3f6ztExVpyVv88Xl/8Vl8M=
+github.com/jackc/pgx/v5 v5.8.0 h1:TYPDoleBBme0xGSAX3/+NujXXtpZn9HBONkQC7IEZSo=
+github.com/jackc/pgx/v5 v5.8.0/go.mod h1:QVeDInX2m9VyzvNeiCJVjCkNFqzsNb43204HshNSZKw=
 github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo=
 github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/kevinburke/ssh_config v1.4.0 h1:6xxtP5bZ2E4NF5tuQulISpTO2z8XbtH8cg1PWkxoFkQ=
