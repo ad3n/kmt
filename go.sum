@@ -101,6 +101,8 @@ github.com/go-git/go-billy/v6 v6.0.0-20260207062542-7cf3dc9049c3 h1:SYirmki6iTQJ
 github.com/go-git/go-billy/v6 v6.0.0-20260207062542-7cf3dc9049c3/go.mod h1:X1oe0Z2qMsa9hkar3AAPuL9hu4Mi3ztXEjdqRhr6fcc=
 github.com/go-git/go-billy/v6 v6.0.0-20260226131633-45bd0956d66f h1:Uvbx7nITO3Sd1GdXarX0TbyYmOaSNIJP0mm4LocEyyA=
 github.com/go-git/go-billy/v6 v6.0.0-20260226131633-45bd0956d66f/go.mod h1:ZW9JC5gionMP1kv5uiaOaV23q0FFmNrVOV8VW+y/acc=
+github.com/go-git/go-billy/v6 v6.0.0-20260328065524-593ae452e14d h1:bLMI9z4mKkfQO383+O3fkP4xdWQcMdnn5fFBMwaBC1M=
+github.com/go-git/go-billy/v6 v6.0.0-20260328065524-593ae452e14d/go.mod h1:LLeMBFApkgIKwMzirxpU9XB7NvO2HdTw5FXmeP1M6c8=
 github.com/go-git/go-git-fixtures/v5 v5.1.0 h1:b8cWxDLTk0s09Ihm9x1HvNGUzxUVlRwIH7EAM0gGDKg=
 github.com/go-git/go-git-fixtures/v5 v5.1.0/go.mod h1:CdmU0oQeDuy4Xh8V0i9Ym+vsTkgDDPKEiofBFEVT+aE=
 github.com/go-git/go-git-fixtures/v5 v5.1.1 h1:OH8i1ojV9bWfr0ZfasfpgtUXQHQyVS8HXik/V1C099w=
@@ -148,6 +150,8 @@ github.com/go-git/go-git/v6 v6.0.0-20260206150416-f623c7555599 h1:M7Z/G+T9nx6cM1
 github.com/go-git/go-git/v6 v6.0.0-20260206150416-f623c7555599/go.mod h1:EWlxLBkiFCzXNCadvt05fT9PCAE2sUedgDsvUUIo18s=
 github.com/go-git/go-git/v6 v6.0.0-20260324221343-cd85c8c75d34 h1:MZZHcO0gAf4aZoW9+gUO+95VoVEzBf1NxcOQc2hT3VE=
 github.com/go-git/go-git/v6 v6.0.0-20260324221343-cd85c8c75d34/go.mod h1:DI8P0o+7Go2ainlUPsVcn9PMtEkg3umUXnxw6Kxppag=
+github.com/go-git/go-git/v6 v6.0.0-20260331140939-8126d61b3452 h1:GK74IG6GXAXA5bBKz62fnjCpHMim3qJljrFGMuVi7T0=
+github.com/go-git/go-git/v6 v6.0.0-20260331140939-8126d61b3452/go.mod h1:MD0nNvDdZ1yFG91XCLWTOQI48oqCRnQBMqraGrKV1p4=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
@@ -200,6 +204,8 @@ github.com/lib/pq v1.11.1 h1:wuChtj2hfsGmmx3nf1m7xC2XpK6OtelS2shMY+bGMtI=
 github.com/lib/pq v1.11.1/go.mod h1:/p+8NSbOcwzAEI7wiMXFlgydTwcgTr3OSKMsD2BitpA=
 github.com/lib/pq v1.12.0 h1:mC1zeiNamwKBecjHarAr26c/+d8V5w/u4J0I/yASbJo=
 github.com/lib/pq v1.12.0/go.mod h1:/p+8NSbOcwzAEI7wiMXFlgydTwcgTr3OSKMsD2BitpA=
+github.com/lib/pq v1.12.1 h1:x1nbl/338GLqeDJ/FAiILallhAsqubLzEZu/pXtHUow=
+github.com/lib/pq v1.12.1/go.mod h1:/p+8NSbOcwzAEI7wiMXFlgydTwcgTr3OSKMsD2BitpA=
 github.com/mattn/go-colorable v0.1.14 h1:9A9LHSqF/7dyVVX6g0U9cwm9pG3kP9gSzcuIPHPsaIE=
 github.com/mattn/go-colorable v0.1.14/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
