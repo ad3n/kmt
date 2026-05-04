@@ -26,7 +26,14 @@ func (i inspect) Describe(table string, schema string, connection string) map[st
 		return nil
 	}
 
-	return db.NewTable("", cfg, conn).Detail(table)
+	result, err := db.NewTable("", cfg, conn).Detail(table)
+	if err != nil {
+		config.ErrorColor.Println(err.Error())
+
+		return nil
+	}
+
+	return result
 }
 
 func (i inspect) Compare(table string, schema string, db1 string, db2 string) map[string]db.Compare {
@@ -44,7 +51,13 @@ func (i inspect) Compare(table string, schema string, db1 string, db2 string) ma
 
 	compare := map[string]db.Compare{}
 
-	tdb1 := db.NewTable("", cfg, conn).Detail(table)
+	tdb1, err := db.NewTable("", cfg, conn).Detail(table)
+	if err != nil {
+		config.ErrorColor.Println(err.Error())
+
+		return nil
+	}
+
 	for k, v := range tdb1 {
 		compare[k] = db.Compare{
 			Table1: db.Column{
@@ -68,7 +81,13 @@ func (i inspect) Compare(table string, schema string, db1 string, db2 string) ma
 		return nil
 	}
 
-	tdb2 := db.NewTable("", cfg, conn).Detail(table)
+	tdb2, err := db.NewTable("", cfg, conn).Detail(table)
+	if err != nil {
+		config.ErrorColor.Println(err.Error())
+
+		return nil
+	}
+
 	for k, v := range tdb2 {
 		cmp := compare[k]
 		cmp.Table2 = db.Column{

@@ -14,9 +14,9 @@ import (
 
 type (
 	Table struct {
-		config  config.Connection
 		db      *sql.DB
 		command string
+		config  config.Connection
 	}
 
 	Ddl struct {
@@ -32,12 +32,10 @@ func NewTable(command string, config config.Connection, db *sql.DB) Table {
 	return Table{command: command, config: config, db: db}
 }
 
-func (t Table) Detail(table string) map[string]Column {
+func (t Table) Detail(table string) (map[string]Column, error) {
 	rows, err := t.db.Query(fmt.Sprintf(QUERY_DESCRIBE_TABLE, table))
 	if err != nil {
-		fmt.Println(err.Error())
-
-		return nil
+		return nil, err
 	}
 
 	result := map[string]Column{}
@@ -48,9 +46,7 @@ func (t Table) Detail(table string) map[string]Column {
 		var dataType string
 		err = rows.Scan(&columnName, &defaultValue, &nullable, &dataType)
 		if err != nil {
-			fmt.Println(err.Error())
-
-			break
+			return nil, err
 		}
 
 		column := Column{
@@ -65,7 +61,7 @@ func (t Table) Detail(table string) map[string]Column {
 		result[columnName] = column
 	}
 
-	return result
+	return result, nil
 }
 
 func (t Table) Generate(name string, schemaOnly bool) Ddl {

@@ -3,8 +3,6 @@ package command
 import (
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
@@ -33,8 +31,7 @@ func (m migrate) Call(source string, schema string, version int) error {
 
 	valid := false
 	for _, file := range files {
-		f := strings.Split(file.Name(), "_")
-		s, _ := strconv.Atoi(f[0])
+		s, _ := parseMigrationVersion(file.Name())
 		if version == s {
 			valid = true
 

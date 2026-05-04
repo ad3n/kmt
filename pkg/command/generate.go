@@ -16,16 +16,16 @@ import (
 
 type (
 	generate struct {
-		config     config.Migration
 		connection *sql.DB
+		config     config.Migration
 	}
 
 	migration struct {
-		tableTool  db.Table
 		wg         *iSync.WaitGroup
 		folder     string
 		schema     string
 		table      string
+		tableTool  db.Table
 		version    int64
 		schemaOnly bool
 	}

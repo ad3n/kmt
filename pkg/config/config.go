@@ -90,8 +90,6 @@ func Parse(path string) Config {
 		config.Migration.Source = "source"
 	}
 
-	os.MkdirAll(config.Migration.Folder, 0777)
-
 	for k, cs := range config.Migration.Connections {
 		for x, v := range cs.Schemas {
 			if v == nil {

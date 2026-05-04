@@ -3,8 +3,6 @@ package command
 import (
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
@@ -94,8 +92,7 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 	}
 
 	tFiles := len(files)
-	file := strings.Split(files[tFiles-1].Name(), "_")
-	vFile, _ := strconv.Atoi(file[0])
+	vFile, _ := parseMigrationVersion(files[tFiles-1].Name())
 
 	valid := false
 	number := 0
@@ -104,8 +101,7 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 			continue
 		}
 
-		f := strings.Split(file.Name(), "_")
-		s, _ := strconv.Atoi(f[0])
+		s, _ := parseMigrationVersion(file.Name())
 		v := uint(s)
 		if v == breakPoint {
 			number++

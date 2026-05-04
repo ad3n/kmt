@@ -3,8 +3,6 @@ package command
 import (
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
@@ -55,8 +53,7 @@ func (v version) Call(source string, schema string) (uint, uint, int) {
 	}
 
 	tFiles := len(files)
-	file := strings.Split(files[tFiles-1].Name(), "_")
-	vFile, _ := strconv.Atoi(file[0])
+	vFile, _ := parseMigrationVersion(files[tFiles-1].Name())
 
 	valid := false
 	number := 0
@@ -65,8 +62,7 @@ func (v version) Call(source string, schema string) (uint, uint, int) {
 			continue
 		}
 
-		f := strings.Split(file.Name(), "_")
-		s, _ := strconv.Atoi(f[0])
+		s, _ := parseMigrationVersion(file.Name())
 		if !valid && (version == uint(s) || vFile == s) {
 			valid = true
 

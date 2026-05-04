@@ -3,8 +3,6 @@ package command
 import (
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -65,8 +63,7 @@ func (r run) Call(source string, schema string, step int) error {
 			continue
 		}
 
-		f := strings.Split(file.Name(), "_")
-		s, _ := strconv.Atoi(f[0])
+		s, _ := parseMigrationVersion(file.Name())
 		if !valid && version == uint(s) {
 			valid = true
 
@@ -74,7 +71,7 @@ func (r run) Call(source string, schema string, step int) error {
 		}
 
 		if valid && number < step {
-			migrations = append(migrations, f[0])
+			migrations = append(migrations, fmt.Sprintf("%d", s))
 
 			number++
 		}
