@@ -70,7 +70,7 @@ func Parse(path string) Config {
 	config := Config{}
 	c, err := os.ReadFile(path)
 	if err != nil {
-		log.Fatalf("Error occur: %s\n", err.Error())
+		log.Fatalf("Kmtfile.yml not found")
 	}
 
 	err = yaml.Unmarshal(c, &config)
