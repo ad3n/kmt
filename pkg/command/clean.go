@@ -4,44 +4,34 @@ import (
 	"fmt"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
-
-	"github.com/fatih/color"
 )
 
 type clean struct {
-	config       config.Migration
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
+	config config.Migration
 }
 
 func NewClean(config config.Migration) clean {
-	return clean{
-		config:       config,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return clean{config: config}
 }
 
 func (c clean) Call(source string, schema string) error {
 	dbConfig, ok := c.config.Connections[source]
 	if !ok {
-		c.errorColor.Printf("Database connection '%s' not found\n", c.boldFont.Sprint(source))
+		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
 
 		return nil
 	}
 
 	_, ok = dbConfig.Schemas[schema]
 	if !ok {
-		c.errorColor.Printf("Schema '%s' not found\n", schema)
+		config.ErrorColor.Printf("Schema '%s' not found\n", schema)
 
 		return nil
 	}
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
@@ -54,7 +44,7 @@ func (c clean) Call(source string, schema string) error {
 		migrator.Steps(-1)
 	}
 
-	c.successColor.Printf("Migration cleaned on %s schema %s\n", c.boldFont.Sprint(source), c.boldFont.Sprint(schema))
+	config.SuccessColor.Printf("Migration cleaned on %s schema %s\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
 
 	return err
 }

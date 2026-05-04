@@ -1,9 +1,13 @@
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/fatih/color"
+)
 
 const (
-	VERSION_STRING = "v2.2.23"
+	VERSION_STRING = "v2.2.25"
 
 	SPINER_INDEX    = 9
 	SPINER_DURATION = 77 * time.Millisecond
@@ -11,4 +15,10 @@ const (
 	REPOSITORY = "https://github.com/ad3n/kmt.git"
 
 	CONFIG_FILE = "Kmtfile.yml"
+)
+
+var (
+	BoldColor    = color.New(color.Bold)
+	ErrorColor   = color.New(color.FgRed)
+	SuccessColor = color.New(color.FgGreen)
 )

@@ -6,24 +6,14 @@ import (
 	"time"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
-
-	"github.com/fatih/color"
 )
 
 type create struct {
-	config       config.Migration
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
+	config config.Migration
 }
 
 func NewCreate(config config.Migration) create {
-	return create{
-		config:       config,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return create{config: config}
 }
 
 func (c create) Call(schema string, name string) error {
@@ -43,7 +33,7 @@ func (c create) Call(schema string, name string) error {
 	}
 
 	if !valid {
-		c.errorColor.Printf("Schema '%s' not found in all connections\n", c.boldFont.Sprint(schema))
+		config.ErrorColor.Printf("Schema '%s' not found in all connections\n", config.BoldColor.Sprint(schema))
 
 		return nil
 	}
@@ -54,19 +44,19 @@ func (c create) Call(schema string, name string) error {
 	name = fmt.Sprintf("%d_%s", version, name)
 	_, err := os.Create(fmt.Sprintf("%s/%s/%s.up.sql", c.config.Folder, schema, name))
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
 
 	_, err = os.Create(fmt.Sprintf("%s/%s/%s.down.sql", c.config.Folder, schema, name))
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
 
-	c.successColor.Printf("Migration created as %s\n", c.boldFont.Sprint(name))
+	config.SuccessColor.Printf("Migration created as %s\n", config.BoldColor.Sprint(name))
 
 	return err
 }

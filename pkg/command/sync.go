@@ -6,30 +6,21 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 
 	"github.com/briandowns/spinner"
-	"github.com/fatih/color"
 	gomigrate "github.com/golang-migrate/migrate/v4"
 )
 
 type sync struct {
-	config       config.Migration
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
+	config config.Migration
 }
 
 func NewSync(config config.Migration) sync {
-	return sync{
-		config:       config,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return sync{config: config}
 }
 
 func (s sync) Run(cluster string, schema string) error {
 	lists, ok := s.config.Clusters[cluster]
 	if !ok {
-		s.errorColor.Printf("Cluster '%s' isn't defined\n", s.boldFont.Sprint(cluster))
+		config.ErrorColor.Printf("Cluster '%s' isn't defined\n", config.BoldColor.Sprint(cluster))
 
 		return nil
 	}
@@ -45,7 +36,7 @@ func (s sync) Run(cluster string, schema string) error {
 
 			x, ok := cConfigs[c]
 			if !ok {
-				s.errorColor.Printf("Connection '%s' isn't defined\n", s.boldFont.Sprint(c))
+				config.ErrorColor.Printf("Connection '%s' isn't defined\n", config.BoldColor.Sprint(c))
 
 				close(connection)
 
@@ -63,7 +54,7 @@ func (s sync) Run(cluster string, schema string) error {
 	for source := range connection {
 		db, err := config.NewConnection(source)
 		if err != nil {
-			s.errorColor.Println(err.Error())
+			config.ErrorColor.Println(err.Error())
 
 			return nil
 		}
@@ -71,7 +62,7 @@ func (s sync) Run(cluster string, schema string) error {
 		migrator := config.NewMigrator(db, source.Name, schema, fmt.Sprintf("%s/%s", s.config.Folder, schema))
 
 		progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", s.successColor.Sprint(<-name), s.successColor.Sprint(schema))
+		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(<-name), config.BoldColor.Sprint(schema))
 		progress.Start()
 
 		err = migrator.Up()
@@ -90,7 +81,7 @@ func (s sync) Run(cluster string, schema string) error {
 		progress.Stop()
 	}
 
-	s.successColor.Printf("Migration synced on %s schema %s\n", s.boldFont.Sprint(cluster), s.boldFont.Sprint(schema))
+	config.SuccessColor.Printf("Migration synced on %s schema %s\n", config.BoldColor.Sprint(cluster), config.BoldColor.Sprint(schema))
 
 	return nil
 }

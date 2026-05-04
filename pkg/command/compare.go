@@ -7,65 +7,55 @@ import (
 	"strings"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
-
-	"github.com/fatih/color"
 )
 
 type compare struct {
-	config       config.Migration
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
+	config config.Migration
 }
 
 func NewCompare(config config.Migration) compare {
-	return compare{
-		config:       config,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return compare{config: config}
 }
 
 func (c compare) Call(source string, compare string, schema string) (uint, uint, int) {
 	dbSource, ok := c.config.Connections[source]
 	if !ok {
-		c.errorColor.Printf("Database connection '%s' not found\n", c.boldFont.Sprint(source))
+		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
 
 		return 0, 0, 0
 	}
 
 	dbCompare, ok := c.config.Connections[compare]
 	if !ok {
-		c.errorColor.Printf("Database connection '%s' not found\n", c.boldFont.Sprint(compare))
+		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(compare))
 
 		return 0, 0, 0
 	}
 
 	_, ok = dbSource.Schemas[schema]
 	if !ok {
-		c.errorColor.Printf("Schema '%s' not found on %s\n", c.boldFont.Sprint(schema), c.boldFont.Sprint(source))
+		config.ErrorColor.Printf("Schema '%s' not found on %s\n", config.BoldColor.Sprint(schema), config.BoldColor.Sprint(source))
 
 		return 0, 0, 0
 	}
 
 	_, ok = dbCompare.Schemas[schema]
 	if !ok {
-		c.errorColor.Printf("Schema '%s' not found on %s\n", c.boldFont.Sprint(schema), c.boldFont.Sprint(compare))
+		config.ErrorColor.Printf("Schema '%s' not found on %s\n", config.BoldColor.Sprint(schema), config.BoldColor.Sprint(compare))
 
 		return 0, 0, 0
 	}
 
 	connSource, err := config.NewConnection(dbSource)
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
 	}
 
 	connCompare, err := config.NewConnection(dbCompare)
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
 	}
@@ -73,7 +63,7 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 	sourceMigrator := config.NewMigrator(connSource, dbSource.Name, schema, fmt.Sprintf("%s/%s", c.config.Folder, schema))
 	sourceVersion, _, err := sourceMigrator.Version()
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
 	}
@@ -81,14 +71,14 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 	compareMigrator := config.NewMigrator(connCompare, dbCompare.Name, schema, fmt.Sprintf("%s/%s", c.config.Folder, schema))
 	compareVersion, _, err := compareMigrator.Version()
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
 	}
 
 	files, err := os.ReadDir(fmt.Sprintf("%s/%s", c.config.Folder, schema))
 	if err != nil {
-		c.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
 	}

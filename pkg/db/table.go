@@ -14,9 +14,9 @@ import (
 
 type (
 	Table struct {
-		command string
 		config  config.Connection
 		db      *sql.DB
+		command string
 	}
 
 	Ddl struct {

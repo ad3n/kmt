@@ -12,30 +12,21 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 
 	"github.com/briandowns/spinner"
-	"github.com/fatih/color"
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
 )
 
 type (
-	upgrade struct {
-		boldFont     *color.Color
-		errorColor   *color.Color
-		successColor *color.Color
-	}
+	upgrade struct{}
 
 	tagInfo struct {
-		Name      string
 		Timestamp time.Time
+		Name      string
 	}
 )
 
 func NewUpgrade() upgrade {
-	return upgrade{
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return upgrade{}
 }
 
 func (u upgrade) Call() error {
@@ -53,7 +44,7 @@ func (u upgrade) Call() error {
 	})
 	if err != nil {
 		progress.Stop()
-		u.errorColor.Println(err)
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -64,7 +55,7 @@ func (u upgrade) Call() error {
 	if err != nil {
 		progress.Stop()
 
-		u.errorColor.Println(err)
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -97,7 +88,7 @@ func (u upgrade) Call() error {
 
 	if len(tagsList) == 0 {
 		progress.Stop()
-		u.successColor.Println("KMT is already up to date")
+		config.SuccessColor.Println("KMT is already up to date")
 
 		return nil
 	}
@@ -105,7 +96,7 @@ func (u upgrade) Call() error {
 	latest := tagsList[0]
 	if latest.Name == config.VERSION_STRING {
 		progress.Stop()
-		u.successColor.Println("KMT is already up to date")
+		config.SuccessColor.Println("KMT is already up to date")
 
 		return nil
 	}
@@ -120,7 +111,7 @@ func (u upgrade) Call() error {
 	err = cmd.Run()
 	if err != nil {
 		progress.Stop()
-		u.errorColor.Println("Error checkout to latest tag")
+		config.ErrorColor.Println("Error checkout to latest tag")
 
 		return nil
 	}
@@ -134,7 +125,7 @@ func (u upgrade) Call() error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		progress.Stop()
-		u.errorColor.Println(string(output))
+		config.ErrorColor.Println(string(output))
 
 		return err
 	}
@@ -147,7 +138,7 @@ func (u upgrade) Call() error {
 	if binPath == "" {
 		output, err := exec.Command("which", "go").CombinedOutput()
 		if err != nil {
-			u.errorColor.Println(string(output))
+			config.ErrorColor.Println(string(output))
 
 			return err
 		}
@@ -160,13 +151,13 @@ func (u upgrade) Call() error {
 	output, err = cmd.CombinedOutput()
 	if err != nil {
 		progress.Stop()
-		u.errorColor.Println(string(output))
+		config.ErrorColor.Println(string(output))
 
 		return err
 	}
 
 	progress.Stop()
-	u.successColor.Printf("KMT has been upgraded to %s\n", u.boldFont.Sprint(latest.Name))
+	config.SuccessColor.Printf("KMT has been upgraded to %s\n", config.BoldColor.Sprint(latest.Name))
 
 	os.RemoveAll(wd)
 

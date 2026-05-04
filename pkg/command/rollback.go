@@ -4,50 +4,40 @@ import (
 	"fmt"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
-
-	"github.com/fatih/color"
 )
 
 type rollback struct {
-	config       config.Migration
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
+	config config.Migration
 }
 
 func NewRollback(config config.Migration) rollback {
-	return rollback{
-		config:       config,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return rollback{config: config}
 }
 
 func (r rollback) Call(source string, schema string, step int) error {
 	if step <= 0 {
-		r.errorColor.Println("Invalid step")
+		config.ErrorColor.Println("Invalid step")
 
 		return nil
 	}
 
 	dbConfig, ok := r.config.Connections[source]
 	if !ok {
-		r.errorColor.Printf("Database connection '%s' not found\n", r.boldFont.Sprint(source))
+		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
 
 		return nil
 	}
 
 	_, ok = dbConfig.Schemas[schema]
 	if !ok {
-		r.errorColor.Printf("Schema '%s' not found\n", r.boldFont.Sprint(schema))
+		config.ErrorColor.Printf("Schema '%s' not found\n", config.BoldColor.Sprint(schema))
 
 		return nil
 	}
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
-		r.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
@@ -55,7 +45,7 @@ func (r rollback) Call(source string, schema string, step int) error {
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", r.config.Folder, schema))
 	err = migrator.Steps(step * -1)
 	if err != nil {
-		r.errorColor.Println(err.Error())
+		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
@@ -66,7 +56,7 @@ func (r rollback) Call(source string, schema string, step int) error {
 		migrator.Steps(-1)
 	}
 
-	r.successColor.Printf("Migration rolled back to %s on %s schema %s\n", r.boldFont.Sprint(version), r.boldFont.Sprint(source), r.boldFont.Sprint(schema))
+	config.SuccessColor.Printf("Migration rolled back to %s on %s schema %s\n", config.BoldColor.Sprint(version), config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
 
 	return nil
 }

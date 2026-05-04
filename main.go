@@ -19,6 +19,8 @@ import (
 )
 
 func main() {
+	cfg := config.Parse(config.CONFIG_FILE)
+
 	app := &cli.Command{
 		Name:                   "kmt",
 		Usage:                  "Kejawen Migration Tool (KMT)",
@@ -35,9 +37,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt sync <cluster> <schema>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewSync(config.Migration).Run(cmd.Args().Get(0), cmd.Args().Get(1))
+					return command.NewSync(cfg.Migration).Run(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -49,9 +49,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt up <connection> <schema>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewUp(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
+					return command.NewUp(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -64,9 +62,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt make <schema> <source> <destination>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewCopy(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2))
+					return command.NewCopy(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2))
 				},
 			},
 			{
@@ -79,17 +75,14 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt rollback <connection> <schema> <step>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-					errorColor := color.New(color.FgRed)
-
 					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
-						errorColor.Println("Step is not number")
+						config.ErrorColor.Println("Step is not number")
 
 						return nil
 					}
 
-					return command.NewRollback(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
+					return command.NewRollback(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -102,17 +95,14 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt run <connection> <schema> <step>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-					errorColor := color.New(color.FgRed)
-
 					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
-						errorColor.Println("Step is not number")
+						config.ErrorColor.Println("Step is not number")
 
 						return nil
 					}
 
-					return command.NewRun(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
+					return command.NewRun(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -125,17 +115,14 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt set <connection> <schema> <version>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-					errorColor := color.New(color.FgRed)
-
 					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
-						errorColor.Println("Version is not number")
+						config.ErrorColor.Println("Version is not number")
 
 						return nil
 					}
 
-					return command.NewSet(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
+					return command.NewSet(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -148,17 +135,14 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt migrate <connection> <schema> <version>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-					errorColor := color.New(color.FgRed)
-
 					n, err := strconv.ParseInt(cmd.Args().Get(2), 10, 0)
 					if err != nil {
-						errorColor.Println("Version is not number")
+						config.ErrorColor.Println("Version is not number")
 
 						return nil
 					}
 
-					return command.NewMigrate(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
+					return command.NewMigrate(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), int(n))
 				},
 			},
 			{
@@ -171,9 +155,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt down <connection> <schema>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewDown(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
+					return command.NewDown(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -186,9 +168,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt drop <connection> <schema>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewDrop(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
+					return command.NewDrop(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -201,9 +181,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt clean <connection> <schema>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewClean(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
+					return command.NewClean(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -216,9 +194,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt create <schema> <name>")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewCreate(config.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
+					return command.NewCreate(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1))
 				},
 			},
 			{
@@ -227,7 +203,6 @@ func main() {
 				Description: "generate [<schema>]",
 				Usage:       "Generate migrations from existing database (reverse migration)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg := config.Parse(config.CONFIG_FILE)
 					source, ok := cfg.Migration.Connections[cfg.Migration.Source]
 					if !ok {
 						return fmt.Errorf("source '%s' not found", cfg.Migration.Source)
@@ -260,8 +235,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt version <connection>/<cluster> [<schema>]")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-					cmdVersion := command.NewVersion(config.Migration)
+					cmdVersion := command.NewVersion(cfg.Migration)
 
 					t := table.New(os.Stdout)
 					t.SetHeaderStyle(table.StyleBold)
@@ -293,9 +267,9 @@ func main() {
 
 					number := 1
 					db := cmd.Args().Get(0)
-					clusters, ok := config.Migration.Clusters[db]
+					clusters, ok := cfg.Migration.Clusters[db]
 					if !ok {
-						source, ok := config.Migration.Connections[db]
+						source, ok := cfg.Migration.Connections[db]
 						if !ok {
 							return fmt.Errorf("cluster/connection '%s' not found", db)
 						}
@@ -325,7 +299,7 @@ func main() {
 					}
 
 					for _, c := range clusters {
-						source, ok := config.Migration.Connections[c]
+						source, ok := cfg.Migration.Connections[c]
 						if !ok {
 							return fmt.Errorf("connection for '%s' not found", c)
 						}
@@ -365,20 +339,19 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt compare <source> <compare> [<schema>]")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-					cmdCompare := command.NewCompare(config.Migration)
+					cmdCompare := command.NewCompare(cfg.Migration)
 
 					t := table.New(os.Stdout)
 					t.SetHeaderStyle(table.StyleBold)
 					t.SetLineStyle(table.StyleBrightBlack)
 					t.SetDividers(table.UnicodeRoundedDividers)
 
-					source, ok := config.Migration.Connections[cmd.Args().Get(0)]
+					source, ok := cfg.Migration.Connections[cmd.Args().Get(0)]
 					if !ok {
 						return fmt.Errorf("connection '%s' not found", cmd.Args().Get(0))
 					}
 
-					compare, ok := config.Migration.Connections[cmd.Args().Get(1)]
+					compare, ok := cfg.Migration.Connections[cmd.Args().Get(1)]
 					if !ok {
 						return fmt.Errorf("connection '%s' not found", cmd.Args().Get(1))
 					}
@@ -429,7 +402,7 @@ func main() {
 								return nil
 							}
 
-							files, err := os.ReadDir(fmt.Sprintf("%s/%s", config.Migration.Folder, k))
+							files, err := os.ReadDir(fmt.Sprintf("%s/%s", cfg.Migration.Folder, k))
 							if err != nil {
 								fmt.Println(err.Error())
 
@@ -472,8 +445,7 @@ func main() {
 						return errors.New("not enough arguments. Usage: kmt detail <table> <schema> <connection1> [<connection>]")
 					}
 
-					config := config.Parse(config.CONFIG_FILE)
-					cmdInspect := command.NewInspect(config.Migration)
+					cmdInspect := command.NewInspect(cfg.Migration)
 
 					t := table.New(os.Stdout)
 					t.SetHeaderStyle(table.StyleBold)
@@ -595,9 +567,7 @@ func main() {
 				Description: "test",
 				Usage:       "Test kmt configuration",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					config := config.Parse(config.CONFIG_FILE)
-
-					return command.NewTest(config.Migration).Call()
+					return command.NewTest(cfg.Migration).Call()
 				},
 			},
 			{

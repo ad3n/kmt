@@ -12,36 +12,29 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/db"
 
 	"github.com/briandowns/spinner"
-	"github.com/fatih/color"
 )
 
 type (
 	generate struct {
-		config       config.Migration
-		connection   *sql.DB
-		boldFont     *color.Color
-		errorColor   *color.Color
-		successColor *color.Color
+		config     config.Migration
+		connection *sql.DB
 	}
 
 	migration struct {
-		wg         *iSync.WaitGroup
 		tableTool  db.Table
+		wg         *iSync.WaitGroup
 		folder     string
-		version    int64
 		schema     string
-		schemaOnly bool
 		table      string
+		version    int64
+		schemaOnly bool
 	}
 )
 
 func NewGenerate(config config.Migration, connection *sql.DB) generate {
 	return generate{
-		config:       config,
-		connection:   connection,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
+		config:     config,
+		connection: connection,
 	}
 }
 
@@ -91,19 +84,19 @@ func do(cMigration <-chan migration, cDdl chan<- db.Ddl) {
 
 func (g generate) Call(schema string) error {
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-	progress.Suffix = fmt.Sprintf(" Listing tables on schema %s...", g.successColor.Sprint(schema))
+	progress.Suffix = fmt.Sprintf(" Listing tables on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
 	source, ok := g.config.Connections[g.config.Source]
 	if !ok {
-		g.errorColor.Printf("Config for '%s' not found", g.boldFont.Sprint(g.config.Source))
+		config.ErrorColor.Printf("Config for '%s' not found", config.BoldColor.Sprint(g.config.Source))
 
 		return nil
 	}
 
 	schemaConfig, ok := source.Schemas[schema]
 	if !ok {
-		g.errorColor.Printf("Schema '%s' not found\n", g.boldFont.Sprint(schema))
+		config.ErrorColor.Printf("Schema '%s' not found\n", config.BoldColor.Sprint(schema))
 
 		return nil
 	}
@@ -113,7 +106,7 @@ func (g generate) Call(schema string) error {
 	version := time.Now().Unix()
 
 	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing enums on schema %s...", g.successColor.Sprint(schema))
+	progress.Suffix = fmt.Sprintf(" Processing enums on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
 	udts := db.NewEnum(g.connection).GenerateDdl(schema)
@@ -123,7 +116,7 @@ func (g generate) Call(schema string) error {
 			if err != nil {
 				progress.Stop()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -132,7 +125,7 @@ func (g generate) Call(schema string) error {
 			if err != nil {
 				progress.Stop()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -162,7 +155,7 @@ func (g generate) Call(schema string) error {
 		for tableName := range cTable {
 			progress.Stop()
 			progress = spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-			progress.Suffix = fmt.Sprintf(" Processing table %s (%d/%d) on schema %s...", g.successColor.Sprint(tableName), count, tTable, g.successColor.Sprint(schema))
+			progress.Suffix = fmt.Sprintf(" Processing table %s (%d/%d) on schema %s...", config.SuccessColor.Sprint(tableName), count, tTable, config.SuccessColor.Sprint(schema))
 			progress.Start()
 
 			schemaOnly := true
@@ -203,7 +196,7 @@ func (g generate) Call(schema string) error {
 			if err != nil {
 				progress.Stop()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				continue
 			}
@@ -212,7 +205,7 @@ func (g generate) Call(schema string) error {
 			if err != nil {
 				progress.Stop()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				continue
 			}
@@ -233,7 +226,7 @@ func (g generate) Call(schema string) error {
 		if err != nil {
 			progress.Stop()
 
-			g.errorColor.Println(err.Error())
+			config.ErrorColor.Println(err.Error())
 
 			continue
 		}
@@ -242,7 +235,7 @@ func (g generate) Call(schema string) error {
 		if err != nil {
 			progress.Stop()
 
-			g.errorColor.Println(err.Error())
+			config.ErrorColor.Println(err.Error())
 
 			continue
 		}
@@ -251,7 +244,7 @@ func (g generate) Call(schema string) error {
 	}
 
 	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing functions on schema %s...", g.successColor.Sprint(schema))
+	progress.Suffix = fmt.Sprintf(" Processing functions on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
 	wg := iSync.WaitGroup{}
@@ -266,7 +259,7 @@ func (g generate) Call(schema string) error {
 
 				wg.Done()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -277,7 +270,7 @@ func (g generate) Call(schema string) error {
 
 				wg.Done()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -289,7 +282,7 @@ func (g generate) Call(schema string) error {
 	}
 
 	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing views on schema %s...", g.successColor.Sprint(schema))
+	progress.Suffix = fmt.Sprintf(" Processing views on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
 	views := db.NewView(g.connection).GenerateDdl(schema)
@@ -302,7 +295,7 @@ func (g generate) Call(schema string) error {
 
 				wg.Done()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -313,7 +306,7 @@ func (g generate) Call(schema string) error {
 
 				wg.Done()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -325,7 +318,7 @@ func (g generate) Call(schema string) error {
 	}
 
 	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing materialized views on schema %s...", g.successColor.Sprint(schema))
+	progress.Suffix = fmt.Sprintf(" Processing materialized views on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
 	mViews := db.NewMaterializedView(g.connection).GenerateDdl(schema)
@@ -338,7 +331,7 @@ func (g generate) Call(schema string) error {
 
 				wg.Done()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -349,7 +342,7 @@ func (g generate) Call(schema string) error {
 
 				wg.Done()
 
-				g.errorColor.Println(err.Error())
+				config.ErrorColor.Println(err.Error())
 
 				return
 			}
@@ -364,7 +357,7 @@ func (g generate) Call(schema string) error {
 
 	progress.Stop()
 
-	g.successColor.Printf("Migration generation on schema %s run successfully\n", g.boldFont.Sprint(schema))
+	config.SuccessColor.Printf("Migration generation on schema %s run successfully\n", config.BoldColor.Sprint(schema))
 
 	return nil
 }

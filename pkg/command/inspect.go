@@ -3,30 +3,20 @@ package command
 import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 	"github.com/ad3n/kmt/v2/pkg/db"
-
-	"github.com/fatih/color"
 )
 
 type inspect struct {
-	config       config.Migration
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
+	config config.Migration
 }
 
 func NewInspect(config config.Migration) inspect {
-	return inspect{
-		config:       config,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return inspect{config: config}
 }
 
-func (d inspect) Describe(table string, schema string, connection string) map[string]db.Column {
-	cfg, ok := d.config.Connections[connection]
+func (i inspect) Describe(table string, schema string, connection string) map[string]db.Column {
+	cfg, ok := i.config.Connections[connection]
 	if !ok {
-		d.errorColor.Printf("Database connection '%s' not found\n", d.boldFont.Sprint(connection))
+		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(connection))
 
 		return nil
 	}
@@ -39,10 +29,10 @@ func (d inspect) Describe(table string, schema string, connection string) map[st
 	return db.NewTable("", cfg, conn).Detail(table)
 }
 
-func (d inspect) Compare(table string, schema string, db1 string, db2 string) map[string]db.Compare {
-	cfg, ok := d.config.Connections[db1]
+func (i inspect) Compare(table string, schema string, db1 string, db2 string) map[string]db.Compare {
+	cfg, ok := i.config.Connections[db1]
 	if !ok {
-		d.errorColor.Printf("Database connection '%s' not found\n", d.boldFont.Sprint(db1))
+		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(db1))
 
 		return nil
 	}
@@ -66,9 +56,9 @@ func (d inspect) Compare(table string, schema string, db1 string, db2 string) ma
 		}
 	}
 
-	cfg, ok = d.config.Connections[db2]
+	cfg, ok = i.config.Connections[db2]
 	if !ok {
-		d.errorColor.Printf("Database connection '%s' not found\n", d.boldFont.Sprint(db2))
+		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(db2))
 
 		return nil
 	}

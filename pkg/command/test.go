@@ -7,23 +7,14 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 
 	"github.com/briandowns/spinner"
-	"github.com/fatih/color"
 )
 
 type test struct {
-	config       config.Migration
-	boldFont     *color.Color
-	errorColor   *color.Color
-	successColor *color.Color
+	config config.Migration
 }
 
 func NewTest(config config.Migration) test {
-	return test{
-		config:       config,
-		boldFont:     color.New(color.Bold),
-		errorColor:   color.New(color.FgRed),
-		successColor: color.New(color.FgGreen),
-	}
+	return test{config: config}
 }
 
 func (t test) Call() error {
@@ -33,14 +24,14 @@ func (t test) Call() error {
 
 	for i, c := range t.config.Connections {
 		progress.Stop()
-		progress.Suffix = fmt.Sprintf(" Test connection to %s...", t.successColor.Sprint(i))
+		progress.Suffix = fmt.Sprintf(" Test connection to %s...", config.SuccessColor.Sprint(i))
 		progress.Start()
 
 		db, err := config.NewConnection(c)
 		if err != nil {
 			progress.Stop()
 
-			t.errorColor.Println(err.Error())
+			config.ErrorColor.Println(err.Error())
 
 			return nil
 		}
@@ -49,7 +40,7 @@ func (t test) Call() error {
 		if err != nil {
 			progress.Stop()
 
-			t.errorColor.Printf("Connection '%s' error %s \n", i, err.Error())
+			config.ErrorColor.Printf("Connection '%s' error %s \n", config.BoldColor.Sprint(i), err.Error())
 
 			return nil
 		}
@@ -57,7 +48,7 @@ func (t test) Call() error {
 
 	progress.Stop()
 
-	progress.Suffix = fmt.Sprintf(" Test '%s' command...", t.successColor.Sprint("pg_dump"))
+	progress.Suffix = fmt.Sprintf(" Test '%s' command...", config.SuccessColor.Sprint("pg_dump"))
 	progress.Start()
 
 	cli := exec.Command(t.config.PgDump, "--version")
@@ -65,14 +56,14 @@ func (t test) Call() error {
 	if err != nil {
 		progress.Stop()
 
-		t.errorColor.Printf("'pg_dump' command not found on %s\n", t.boldFont.Sprint(t.config.PgDump))
+		config.ErrorColor.Printf("'pg_dump' command not found on %s\n", config.BoldColor.Sprint(t.config.PgDump))
 
 		return nil
 	}
 
 	progress.Stop()
 
-	t.successColor.Println("Config test passed")
+	config.SuccessColor.Println("Config test passed")
 
 	return nil
 }

@@ -9,8 +9,8 @@ type (
 
 	Column struct {
 		DefaultValue string
-		Nullable     bool
 		DataType     string
+		Nullable     bool
 	}
 
 	Compare struct {
