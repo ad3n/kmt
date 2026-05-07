@@ -164,6 +164,8 @@ github.com/go-git/go-git/v6 v6.0.0-alpha.1 h1:tGohX5luKeO50DZD0/Zqd5dYjJzKtub91S
 github.com/go-git/go-git/v6 v6.0.0-alpha.1/go.mod h1:qtzfNHlFsnq6vCw54aT4KvFWPK5bsOpTVtFC2sysdB8=
 github.com/go-git/go-git/v6 v6.0.0-alpha.2 h1:T3loNtDuAixNzXtlQxZhnYiYpaQ3CA4vn9RssAniEeI=
 github.com/go-git/go-git/v6 v6.0.0-alpha.2/go.mod h1:oCD3i19CTz7gBpeb11ZZqL91WzqbMq9avn5KpUYy/Ak=
+github.com/go-git/go-git/v6 v6.0.0-alpha.3 h1:lJGritJ5AcC0X7buV0lReZ4cEHqcKB3Ab2ZjD3Ku+Ss=
+github.com/go-git/go-git/v6 v6.0.0-alpha.3/go.mod h1:DGnqu+twdAgtDx/4tQTWFrVE1an+2ACph3W9yOfSJZM=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
