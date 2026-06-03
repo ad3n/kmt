@@ -8,7 +8,7 @@ require (
 	github.com/go-git/go-git/v6 v6.0.0-alpha.4
 	github.com/goccy/go-yaml v1.19.2
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/urfave/cli/v3 v3.9.0
 )
 
