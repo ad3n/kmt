@@ -1,21 +1,21 @@
 package command
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type compare struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewCompare(config config.Migration) compare {
-	return compare{config: config}
+func NewCompare(config *config.Migration) *compare {
+	return &compare{config: config}
 }
 
-func (c compare) Call(source string, compare string, schema string) (uint, uint, int) {
+func (c *compare) Call(source string, compare string, schema string) (uint, uint, int) {
 	dbSource, ok := c.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -50,6 +50,7 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 
 		return 0, 0, 0
 	}
+	defer connSource.Close()
 
 	connCompare, err := config.NewConnection(dbCompare)
 	if err != nil {
@@ -57,8 +58,12 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 
 		return 0, 0, 0
 	}
+	defer connCompare.Close()
 
-	sourceMigrator := config.NewMigrator(connSource, dbSource.Name, schema, fmt.Sprintf("%s/%s", c.config.Folder, schema))
+	migrationFolder := filepath.Join(c.config.Folder, schema)
+	sourceMigrator := config.NewMigrator(connSource, dbSource.Name, schema, migrationFolder)
+	defer sourceMigrator.Close()
+
 	sourceVersion, _, err := sourceMigrator.Version()
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
@@ -66,7 +71,9 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 		return 0, 0, 0
 	}
 
-	compareMigrator := config.NewMigrator(connCompare, dbCompare.Name, schema, fmt.Sprintf("%s/%s", c.config.Folder, schema))
+	compareMigrator := config.NewMigrator(connCompare, dbCompare.Name, schema, migrationFolder)
+	defer compareMigrator.Close()
+
 	compareVersion, _, err := compareMigrator.Version()
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
@@ -74,11 +81,16 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 		return 0, 0, 0
 	}
 
-	files, err := os.ReadDir(fmt.Sprintf("%s/%s", c.config.Folder, schema))
+	files, err := os.ReadDir(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
+	}
+
+	filesLength := len(files)
+	if filesLength == 0 {
+		return sourceVersion, compareVersion, 0
 	}
 
 	if sourceVersion == compareVersion {
@@ -91,8 +103,12 @@ func (c compare) Call(source string, compare string, schema string) (uint, uint,
 		version, breakPoint = breakPoint, version
 	}
 
-	tFiles := len(files)
-	vFile, _ := parseMigrationVersion(files[tFiles-1].Name())
+	vFile, err := parseMigrationVersion(files[filesLength-1].Name())
+	if err != nil {
+		config.ErrorColor.Println(err.Error())
+
+		return 0, 0, 0
+	}
 
 	valid := false
 	number := 0

@@ -3,7 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
+	"slices"
 )
 
 type (
@@ -12,41 +12,24 @@ type (
 	}
 )
 
-func NewSchema(db *sql.DB) schema {
-	return schema{db: db}
+func NewSchema(db *sql.DB) *schema {
+	return &schema{db: db}
 }
 
-func (s schema) CountTable(name string, nExcludes int) int {
-	rows, err := s.db.Query(fmt.Sprintf(QUERY_COUNT_TABLE, name))
+func (s *schema) CountTable(name string, nExcludes int) int {
+	var total int
+
+	err := s.db.QueryRow(fmt.Sprintf(QUERY_COUNT_TABLE, name), nil).Scan(&total)
 	if err != nil {
 		fmt.Println(err.Error())
 
 		return 0
 	}
 
-	defer rows.Close()
-
-	var total string
-	for rows.Next() {
-		err = rows.Scan(&total)
-		if err != nil {
-			fmt.Println(err.Error())
-
-			return 0
-		}
-	}
-
-	i, err := strconv.Atoi(total)
-	if err != nil {
-		fmt.Println(err.Error())
-
-		return 0
-	}
-
-	return i - nExcludes
+	return total - nExcludes
 }
 
-func (s schema) ListTable(nWorker int, name string, excludes ...string) <-chan string {
+func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan string {
 	cTable := make(chan string, nWorker)
 	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_TABLE, name))
 	if err != nil {
@@ -65,22 +48,16 @@ func (s schema) ListTable(nWorker int, name string, excludes ...string) <-chan s
 				continue
 			}
 
-			skip := false
-			for _, v := range excludes {
-				if v == table {
-					skip = true
-
-					break
-				}
-			}
-
+			skip := slices.Contains(excludes, table)
 			if !skip {
 				channel <- table
+
 				skip = false
 			}
 		}
 
 		close(channel)
+
 		rows.Close()
 	}(rows, cTable)
 

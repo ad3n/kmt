@@ -1,21 +1,21 @@
 package command
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type version struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewVersion(config config.Migration) version {
-	return version{config: config}
+func NewVersion(config *config.Migration) *version {
+	return &version{config: config}
 }
 
-func (v version) Call(source string, schema string) (uint, uint, int) {
+func (v *version) Call(source string, schema string) (uint, uint, int) {
 	dbConfig, ok := v.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -36,8 +36,12 @@ func (v version) Call(source string, schema string) (uint, uint, int) {
 
 		return 0, 0, 0
 	}
+	defer db.Close()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", v.config.Folder, schema))
+	migrationFolder := filepath.Join(v.config.Folder, schema)
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
+	defer migrator.Close()
+
 	version, _, err := migrator.Version()
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
@@ -45,15 +49,24 @@ func (v version) Call(source string, schema string) (uint, uint, int) {
 		return 0, 0, 0
 	}
 
-	files, err := os.ReadDir(fmt.Sprintf("%s/%s", v.config.Folder, schema))
+	files, err := os.ReadDir(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
 	}
 
-	tFiles := len(files)
-	vFile, _ := parseMigrationVersion(files[tFiles-1].Name())
+	filesLength := len(files)
+	if filesLength == 0 {
+		return 0, 0, 0
+	}
+
+	vFile, err := parseMigrationVersion(files[filesLength-1].Name())
+	if err != nil {
+		config.ErrorColor.Println(err.Error())
+
+		return 0, 0, 0
+	}
 
 	valid := false
 	number := 0

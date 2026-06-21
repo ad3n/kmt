@@ -15,30 +15,30 @@ import (
 type (
 	Table struct {
 		db      *sql.DB
+		config  *config.Connection
 		command string
-		config  config.Connection
 	}
 
 	Ddl struct {
+		Definition *Migration
+		Insert     *Migration
+		Reference  *Migration
+		ForeignKey *Migration
 		Name       string
-		Definition Migration
-		Insert     Migration
-		Reference  Migration
-		ForeignKey Migration
 	}
 )
 
-func NewTable(command string, config config.Connection, db *sql.DB) Table {
-	return Table{command: command, config: config, db: db}
+func NewTable(command string, config *config.Connection, db *sql.DB) *Table {
+	return &Table{command: command, config: config, db: db}
 }
 
-func (t Table) Detail(table string) (map[string]Column, error) {
+func (t *Table) Detail(table string) (map[string]*Column, error) {
 	rows, err := t.db.Query(fmt.Sprintf(QUERY_DESCRIBE_TABLE, table))
 	if err != nil {
 		return nil, err
 	}
 
-	result := map[string]Column{}
+	result := make(map[string]*Column)
 	for rows.Next() {
 		var columnName string
 		var defaultValue string
@@ -49,7 +49,7 @@ func (t Table) Detail(table string) (map[string]Column, error) {
 			return nil, err
 		}
 
-		column := Column{
+		column := &Column{
 			DefaultValue: defaultValue,
 			DataType:     dataType,
 		}
@@ -64,7 +64,7 @@ func (t Table) Detail(table string) (map[string]Column, error) {
 	return result, nil
 }
 
-func (t Table) Generate(name string, schemaOnly bool) Ddl {
+func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	options := []string{
 		"--no-comments",
 		"--no-publications",
@@ -203,9 +203,9 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 
 	}
 
-	return Ddl{
+	return &Ddl{
 		Name: strings.ReplaceAll(name, ".", "_"),
-		Definition: Migration{
+		Definition: &Migration{
 			UpScript: strings.ReplaceAll(
 				strings.ReplaceAll(
 					strings.ReplaceAll(
@@ -221,15 +221,15 @@ func (t Table) Generate(name string, schemaOnly bool) Ddl {
 			),
 			DownScript: downScript.String(),
 		},
-		Insert: Migration{
+		Insert: &Migration{
 			UpScript:   insertScript.String(),
 			DownScript: deleteScript.String(),
 		},
-		Reference: Migration{
+		Reference: &Migration{
 			UpScript:   upReferenceScript.String(),
 			DownScript: downReferenceScript.String(),
 		},
-		ForeignKey: Migration{
+		ForeignKey: &Migration{
 			UpScript:   upForeignScript.String(),
 			DownScript: downForeignScript.String(),
 		},

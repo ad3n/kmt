@@ -9,12 +9,12 @@ type view struct {
 	db *sql.DB
 }
 
-func NewView(db *sql.DB) view {
-	return view{db: db}
+func NewView(db *sql.DB) *view {
+	return &view{db: db}
 }
 
-func (s view) GenerateDdl(schema string) <-chan Migration {
-	cMigration := make(chan Migration)
+func (s *view) GenerateDdl(schema string) <-chan *Migration {
+	cMigration := make(chan *Migration)
 	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_VIEW, schema))
 	if err != nil {
 		fmt.Println(err.Error())
@@ -22,7 +22,7 @@ func (s view) GenerateDdl(schema string) <-chan Migration {
 		return cMigration
 	}
 
-	go func(result *sql.Rows, channel chan<- Migration) {
+	go func(result *sql.Rows, channel chan<- *Migration) {
 		for result.Next() {
 			var name string
 			var definition string
@@ -33,7 +33,7 @@ func (s view) GenerateDdl(schema string) <-chan Migration {
 				continue
 			}
 
-			channel <- Migration{
+			channel <- &Migration{
 				Name:       name,
 				UpScript:   fmt.Sprintf(SECURE_CREATE_VIEW, name, definition),
 				DownScript: fmt.Sprintf(SECURE_DROP_VIEW, name),
@@ -41,6 +41,7 @@ func (s view) GenerateDdl(schema string) <-chan Migration {
 		}
 
 		close(channel)
+
 		rows.Close()
 	}(rows, cMigration)
 

@@ -1,7 +1,6 @@
 package command
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,13 +24,13 @@ type (
 	}
 )
 
-func NewUpgrade() upgrade {
-	return upgrade{}
+func NewUpgrade() *upgrade {
+	return &upgrade{}
 }
 
-func (u upgrade) Call() error {
+func (u *upgrade) Call() error {
 	temp := strings.TrimSuffix(os.TempDir(), "/")
-	wd := fmt.Sprintf("%s/kmt", temp)
+	wd := filepath.Join(temp, "kmt")
 	os.RemoveAll(wd)
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
@@ -49,7 +48,7 @@ func (u upgrade) Call() error {
 		return nil
 	}
 
-	var tagsList []tagInfo
+	var tagsList []*tagInfo
 
 	tags, err := repository.Tags()
 	if err != nil {
@@ -63,7 +62,7 @@ func (u upgrade) Call() error {
 	_ = tags.ForEach(func(t *plumbing.Reference) error {
 		tag, err := repository.TagObject(t.Hash())
 		if err == nil {
-			tagsList = append(tagsList, tagInfo{
+			tagsList = append(tagsList, &tagInfo{
 				Name:      t.Name().Short(),
 				Timestamp: tag.Tagger.When,
 			})
@@ -73,7 +72,7 @@ func (u upgrade) Call() error {
 
 		commit, err := repository.CommitObject(t.Hash())
 		if err == nil {
-			tagsList = append(tagsList, tagInfo{
+			tagsList = append(tagsList, &tagInfo{
 				Name:      t.Name().Short(),
 				Timestamp: commit.Committer.When,
 			})
@@ -132,7 +131,7 @@ func (u upgrade) Call() error {
 
 	binPath := os.Getenv("GOBIN")
 	if binPath == "" {
-		binPath = fmt.Sprintf("%s/bin", os.Getenv("GOPATH"))
+		binPath = filepath.Join(os.Getenv("GOPATH"), "bin")
 	}
 
 	if binPath == "" {
@@ -146,7 +145,7 @@ func (u upgrade) Call() error {
 		binPath = strings.TrimSuffix(filepath.Dir(string(output)), "/")
 	}
 
-	cmd = exec.Command("mv", "kmt", fmt.Sprintf("%s/kmt", binPath))
+	cmd = exec.Command("mv", "kmt", filepath.Join(binPath, "kmt"))
 	cmd.Dir = wd
 	output, err = cmd.CombinedOutput()
 	if err != nil {

@@ -1,20 +1,20 @@
 package command
 
 import (
-	"fmt"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type clean struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewClean(config config.Migration) clean {
-	return clean{config: config}
+func NewClean(config *config.Migration) *clean {
+	return &clean{config: config}
 }
 
-func (c clean) Call(source string, schema string) error {
+func (c *clean) Call(source string, schema string) error {
 	dbConfig, ok := c.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -35,13 +35,20 @@ func (c clean) Call(source string, schema string) error {
 
 		return nil
 	}
+	defer db.Close()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", c.config.Folder, schema))
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(c.config.Folder, schema))
+	defer migrator.Close()
 
-	version, dirty, _ := migrator.Version()
-	if version != 0 && dirty {
-		migrator.Force(int(version))
-		migrator.Steps(-1)
+	version, dirty, err := migrator.Version()
+	if err == nil && version > 0 && dirty {
+		if err := migrator.Force(int(version)); err != nil {
+			return err
+		}
+
+		if err := migrator.Steps(-1); err != nil {
+			return err
+		}
 	}
 
 	config.SuccessColor.Printf("Migration cleaned on %s schema %s\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))

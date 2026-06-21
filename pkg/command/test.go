@@ -10,14 +10,14 @@ import (
 )
 
 type test struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewTest(config config.Migration) test {
-	return test{config: config}
+func NewTest(config *config.Migration) *test {
+	return &test{config: config}
 }
 
-func (t test) Call() error {
+func (t *test) Call() error {
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = " Test connections config..."
 	progress.Start()
@@ -35,6 +35,7 @@ func (t test) Call() error {
 
 			return nil
 		}
+		defer db.Close()
 
 		_, err = db.Query("SELECT 1")
 		if err != nil {

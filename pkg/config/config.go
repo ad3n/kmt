@@ -18,15 +18,15 @@ import (
 
 type (
 	Config struct {
-		Migration Migration `yaml:"migration"`
+		Migration *Migration `yaml:"migration"`
 	}
 
 	Migration struct {
-		Clusters    map[string][]string   `yaml:"clusters"`
-		Connections map[string]Connection `yaml:"connections"`
-		PgDump      string                `yaml:"pg_dump"`
-		Folder      string                `yaml:"folder"`
-		Source      string                `yaml:"source"`
+		Clusters    map[string][]string    `yaml:"clusters"`
+		Connections map[string]*Connection `yaml:"connections"`
+		PgDump      string                 `yaml:"pg_dump"`
+		Folder      string                 `yaml:"folder"`
+		Source      string                 `yaml:"source"`
 	}
 
 	Connection struct {
@@ -40,7 +40,7 @@ type (
 	}
 )
 
-func NewConnection(database Connection) (*sql.DB, error) {
+func NewConnection(database *Connection) (*sql.DB, error) {
 	options := strings.Builder{}
 	for k, v := range database.Options {
 		options.WriteString(k)
@@ -66,8 +66,8 @@ func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migr
 	return migrate
 }
 
-func Parse(path string) Config {
-	config := Config{}
+func Parse(path string) *Config {
+	config := &Config{}
 	c, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatalf("Kmtfile.yml not found")

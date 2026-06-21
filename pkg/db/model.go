@@ -14,12 +14,12 @@ type (
 	}
 
 	Compare struct {
-		Table1 Column
-		Table2 Column
+		Table1 *Column
+		Table2 *Column
 	}
 
 	Migrate interface {
-		GenerateDdl(schema string) []Migration
+		GenerateDdl(schema string) []*Migration
 	}
 )
 

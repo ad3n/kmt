@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -10,14 +11,14 @@ import (
 )
 
 type down struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewDown(config config.Migration) down {
-	return down{config: config}
+func NewDown(config *config.Migration) *down {
+	return &down{config: config}
 }
 
-func (d down) Call(source string, schema string) error {
+func (d *down) Call(source string, schema string) error {
 	dbConfig, ok := d.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -38,8 +39,10 @@ func (d down) Call(source string, schema string) error {
 
 		return nil
 	}
+	defer db.Close()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", d.config.Folder, schema))
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(d.config.Folder, schema))
+	defer migrator.Close()
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = fmt.Sprintf(" Tear down migrations for %s on %s schema", config.SuccessColor.Sprint(source), config.SuccessColor.Sprint(schema))

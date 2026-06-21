@@ -1,7 +1,7 @@
 package command
 
 import (
-	"fmt"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -9,14 +9,14 @@ import (
 )
 
 type copy struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewCopy(config config.Migration) copy {
-	return copy{config: config}
+func NewCopy(config *config.Migration) *copy {
+	return &copy{config: config}
 }
 
-func (c copy) Call(schema string, source string, destination string) error {
+func (c *copy) Call(schema string, source string, destination string) error {
 	sourceConfig, ok := c.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -51,6 +51,7 @@ func (c copy) Call(schema string, source string, destination string) error {
 
 		return nil
 	}
+	defer sourceDb.Close()
 
 	destinationDb, err := config.NewConnection(destinationConfig)
 	if err != nil {
@@ -58,9 +59,14 @@ func (c copy) Call(schema string, source string, destination string) error {
 
 		return nil
 	}
+	defer destinationDb.Close()
 
-	sourceMigrator := config.NewMigrator(sourceDb, sourceConfig.Name, schema, fmt.Sprintf("%s/%s", c.config.Folder, schema))
-	destinationMigrator := config.NewMigrator(destinationDb, destinationConfig.Name, schema, fmt.Sprintf("%s/%s", c.config.Folder, schema))
+	migrationFolder := filepath.Join(c.config.Folder, schema)
+	sourceMigrator := config.NewMigrator(sourceDb, sourceConfig.Name, schema, migrationFolder)
+	defer sourceMigrator.Close()
+
+	destinationMigrator := config.NewMigrator(destinationDb, destinationConfig.Name, schema, migrationFolder)
+	defer destinationMigrator.Close()
 
 	sourceVersion, _, err := sourceMigrator.Version()
 	if err != nil {

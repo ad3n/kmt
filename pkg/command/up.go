@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -10,14 +11,14 @@ import (
 )
 
 type up struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewUp(config config.Migration) up {
-	return up{config: config}
+func NewUp(config *config.Migration) *up {
+	return &up{config: config}
 }
 
-func (u up) Call(source string, schema string) error {
+func (u *up) Call(source string, schema string) error {
 	dbConfig, ok := u.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -38,6 +39,7 @@ func (u up) Call(source string, schema string) error {
 
 		return nil
 	}
+	defer db.Close()
 
 	_, err = db.Exec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", schema))
 	if err != nil {
@@ -46,7 +48,8 @@ func (u up) Call(source string, schema string) error {
 		return nil
 	}
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", u.config.Folder, schema))
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(u.config.Folder, schema))
+	defer migrator.Close()
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(source), config.SuccessColor.Sprint(schema))
@@ -61,10 +64,15 @@ func (u up) Call(source string, schema string) error {
 		return nil
 	}
 
-	version, dirty, _ := migrator.Version()
-	if version != 0 && dirty {
-		migrator.Force(int(version))
-		migrator.Steps(-1)
+	version, dirty, err := migrator.Version()
+	if err == nil && version > 0 && dirty {
+		if err := migrator.Force(int(version)); err != nil {
+			return err
+		}
+
+		if err := migrator.Steps(-1); err != nil {
+			return err
+		}
 	}
 
 	progress.Stop()

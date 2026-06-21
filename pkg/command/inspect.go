@@ -6,14 +6,14 @@ import (
 )
 
 type inspect struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewInspect(config config.Migration) inspect {
-	return inspect{config: config}
+func NewInspect(config *config.Migration) *inspect {
+	return &inspect{config: config}
 }
 
-func (i inspect) Describe(table string, schema string, connection string) map[string]db.Column {
+func (i *inspect) Describe(table string, schema string, connection string) map[string]*db.Column {
 	cfg, ok := i.config.Connections[connection]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(connection))
@@ -25,6 +25,7 @@ func (i inspect) Describe(table string, schema string, connection string) map[st
 	if err != nil {
 		return nil
 	}
+	defer conn.Close()
 
 	result, err := db.NewTable("", cfg, conn).Detail(table)
 	if err != nil {
@@ -36,7 +37,7 @@ func (i inspect) Describe(table string, schema string, connection string) map[st
 	return result
 }
 
-func (i inspect) Compare(table string, schema string, db1 string, db2 string) map[string]db.Compare {
+func (i *inspect) Compare(table string, schema string, db1 string, db2 string) map[string]*db.Compare {
 	cfg, ok := i.config.Connections[db1]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(db1))
@@ -48,8 +49,9 @@ func (i inspect) Compare(table string, schema string, db1 string, db2 string) ma
 	if err != nil {
 		return nil
 	}
+	defer conn.Close()
 
-	compare := map[string]db.Compare{}
+	compare := map[string]*db.Compare{}
 
 	tdb1, err := db.NewTable("", cfg, conn).Detail(table)
 	if err != nil {
@@ -59,13 +61,13 @@ func (i inspect) Compare(table string, schema string, db1 string, db2 string) ma
 	}
 
 	for k, v := range tdb1 {
-		compare[k] = db.Compare{
-			Table1: db.Column{
+		compare[k] = &db.Compare{
+			Table1: &db.Column{
 				DataType:     v.DataType,
 				DefaultValue: v.DefaultValue,
 				Nullable:     v.Nullable,
 			},
-			Table2: db.Column{},
+			Table2: &db.Column{},
 		}
 	}
 
@@ -80,6 +82,7 @@ func (i inspect) Compare(table string, schema string, db1 string, db2 string) ma
 	if err != nil {
 		return nil
 	}
+	defer conn.Close()
 
 	tdb2, err := db.NewTable("", cfg, conn).Detail(table)
 	if err != nil {
@@ -90,7 +93,7 @@ func (i inspect) Compare(table string, schema string, db1 string, db2 string) ma
 
 	for k, v := range tdb2 {
 		cmp := compare[k]
-		cmp.Table2 = db.Column{
+		cmp.Table2 = &db.Column{
 			DataType:     v.DataType,
 			DefaultValue: v.DefaultValue,
 			Nullable:     v.Nullable,

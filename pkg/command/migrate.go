@@ -1,28 +1,29 @@
 package command
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type migrate struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewMigrate(config config.Migration) migrate {
-	return migrate{config: config}
+func NewMigrate(config *config.Migration) *migrate {
+	return &migrate{config: config}
 }
 
-func (m migrate) Call(source string, schema string, version int) error {
+func (m *migrate) Call(source string, schema string, version int) error {
 	if version <= 0 {
 		config.ErrorColor.Println("Invalid version")
 
 		return nil
 	}
 
-	files, err := os.ReadDir(fmt.Sprintf("%s/%s", m.config.Folder, schema))
+	migrationFolder := filepath.Join(m.config.Folder, schema)
+	files, err := os.ReadDir(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
@@ -65,8 +66,11 @@ func (m migrate) Call(source string, schema string, version int) error {
 
 		return nil
 	}
+	defer db.Close()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", m.config.Folder, schema))
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
+	defer migrator.Close()
+
 	err = migrator.Migrate(uint(version))
 	if err != nil {
 		config.ErrorColor.Println(err.Error())

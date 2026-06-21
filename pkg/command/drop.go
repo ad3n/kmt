@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -10,14 +11,14 @@ import (
 )
 
 type drop struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewDrop(config config.Migration) drop {
-	return drop{config: config}
+func NewDrop(config *config.Migration) *drop {
+	return &drop{config: config}
 }
 
-func (d drop) Call(source string, schema string) error {
+func (d *drop) Call(source string, schema string) error {
 	dbConfig, ok := d.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -38,8 +39,10 @@ func (d drop) Call(source string, schema string) error {
 
 		return nil
 	}
+	defer db.Close()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", d.config.Folder, schema))
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(d.config.Folder, schema))
+	defer migrator.Close()
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = fmt.Sprintf(" Dropping migrations for %s on %s schema", config.SuccessColor.Sprint(source), config.SuccessColor.Sprint(schema))
@@ -54,10 +57,15 @@ func (d drop) Call(source string, schema string) error {
 		return nil
 	}
 
-	version, dirty, _ := migrator.Version()
-	if version != 0 && dirty {
-		migrator.Force(int(version))
-		migrator.Steps(-1)
+	version, dirty, err := migrator.Version()
+	if err == nil && version > 0 && dirty {
+		if err := migrator.Force(int(version)); err != nil {
+			return err
+		}
+
+		if err := migrator.Steps(-1); err != nil {
+			return err
+		}
 	}
 
 	progress.Stop()

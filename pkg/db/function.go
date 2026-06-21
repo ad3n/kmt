@@ -9,12 +9,12 @@ type function struct {
 	db *sql.DB
 }
 
-func NewFunction(db *sql.DB) function {
-	return function{db: db}
+func NewFunction(db *sql.DB) *function {
+	return &function{db: db}
 }
 
-func (s function) GenerateDdl(schema string) <-chan Migration {
-	cMigration := make(chan Migration)
+func (s *function) GenerateDdl(schema string) <-chan *Migration {
+	cMigration := make(chan *Migration)
 	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_FUNCTION, schema))
 	if err != nil {
 		fmt.Println(err.Error())
@@ -22,7 +22,7 @@ func (s function) GenerateDdl(schema string) <-chan Migration {
 		return cMigration
 	}
 
-	go func(result *sql.Rows, channel chan<- Migration) {
+	go func(result *sql.Rows, channel chan<- *Migration) {
 		for result.Next() {
 			var name string
 			var definition string
@@ -34,7 +34,7 @@ func (s function) GenerateDdl(schema string) <-chan Migration {
 				continue
 			}
 
-			channel <- Migration{
+			channel <- &Migration{
 				Name:       name,
 				UpScript:   fmt.Sprintf("%s;", definition),
 				DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, name, params),
@@ -42,6 +42,7 @@ func (s function) GenerateDdl(schema string) <-chan Migration {
 		}
 
 		close(channel)
+
 		rows.Close()
 	}(rows, cMigration)
 

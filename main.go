@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -212,6 +213,7 @@ func main() {
 					if err != nil {
 						return err
 					}
+					defer db.Close()
 
 					cmdGenerate := command.NewGenerate(cfg.Migration, db)
 					if cmd.NArg() == 1 {
@@ -259,7 +261,7 @@ func main() {
 							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
-						t.AddRow("1", db, schema, fmt.Sprintf("%d", vFile), fmt.Sprintf("%d", vDb), status, fmt.Sprintf("%d", diff))
+						t.AddRow("1", db, schema, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
 						t.Render()
 
 						return nil
@@ -288,7 +290,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(color.New(color.Bold).Sprint(number), db, k, fmt.Sprintf("%d", vFile), fmt.Sprintf("%d", vDb), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), db, k, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
 
 							number++
 						}
@@ -318,7 +320,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(color.New(color.Bold).Sprint(number), c, k, fmt.Sprintf("%d", vFile), fmt.Sprintf("%d", vDb), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), c, k, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
 
 							number++
 						}
@@ -383,7 +385,7 @@ func main() {
 							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
-						t.AddRow("1", schema, fmt.Sprintf("%d", vSource), fmt.Sprintf("%d", vCompare), status, fmt.Sprintf("%d", diff))
+						t.AddRow("1", schema, strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
 						t.Render()
 
 						return nil
@@ -402,15 +404,19 @@ func main() {
 								return nil
 							}
 
-							files, err := os.ReadDir(fmt.Sprintf("%s/%s", cfg.Migration.Folder, k))
+							files, err := os.ReadDir(filepath.Join(cfg.Migration.Folder, k))
 							if err != nil {
 								fmt.Println(err.Error())
 
 								return nil
 							}
 
-							tFiles := len(files)
-							file := strings.Split(files[tFiles-1].Name(), "_")
+							filesLength := len(files)
+							if filesLength == 0 {
+								return nil
+							}
+
+							file := strings.Split(files[filesLength-1].Name(), "_")
 							version, _ := strconv.Atoi(file[0])
 
 							sync := uint(version) == vSource && vSource == vCompare
@@ -421,7 +427,7 @@ func main() {
 								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
-							t.AddRow(color.New(color.Bold).Sprint(number), k, fmt.Sprintf("%d", version), fmt.Sprintf("%d", vSource), fmt.Sprintf("%d", vCompare), status, fmt.Sprintf("%d", diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), k, strconv.Itoa(version), strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
 
 							number++
 						}

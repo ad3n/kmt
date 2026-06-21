@@ -3,20 +3,21 @@ package command
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type create struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewCreate(config config.Migration) create {
-	return create{config: config}
+func NewCreate(config *config.Migration) *create {
+	return &create{config: config}
 }
 
-func (c create) Call(schema string, name string) error {
+func (c *create) Call(schema string, name string) error {
 	valid := false
 	for _, c := range c.config.Connections {
 		for s := range c.Schemas {
@@ -38,18 +39,20 @@ func (c create) Call(schema string, name string) error {
 		return nil
 	}
 
-	os.MkdirAll(fmt.Sprintf("%s/%s", c.config.Folder, schema), 0777)
-
 	version := time.Now().Unix()
+	migrationFolder := filepath.Join(c.config.Folder, schema)
+
+	os.MkdirAll(migrationFolder, 0777)
+
 	name = fmt.Sprintf("%d_%s", version, name)
-	_, err := os.Create(fmt.Sprintf("%s/%s/%s.up.sql", c.config.Folder, schema, name))
+	_, err := os.Create(filepath.Join(migrationFolder, name+".up.sql"))
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
 
-	_, err = os.Create(fmt.Sprintf("%s/%s/%s.down.sql", c.config.Folder, schema, name))
+	_, err = os.Create(filepath.Join(migrationFolder, name+".down.sql"))
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 

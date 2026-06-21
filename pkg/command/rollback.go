@@ -1,20 +1,20 @@
 package command
 
 import (
-	"fmt"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type rollback struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewRollback(config config.Migration) rollback {
-	return rollback{config: config}
+func NewRollback(config *config.Migration) *rollback {
+	return &rollback{config: config}
 }
 
-func (r rollback) Call(source string, schema string, step int) error {
+func (r *rollback) Call(source string, schema string, step int) error {
 	if step <= 0 {
 		config.ErrorColor.Println("Invalid step")
 
@@ -41,8 +41,11 @@ func (r rollback) Call(source string, schema string, step int) error {
 
 		return nil
 	}
+	defer db.Close()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", r.config.Folder, schema))
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(r.config.Folder, schema))
+	defer migrator.Close()
+
 	err = migrator.Steps(step * -1)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
@@ -50,10 +53,15 @@ func (r rollback) Call(source string, schema string, step int) error {
 		return nil
 	}
 
-	version, dirty, _ := migrator.Version()
-	if version != 0 && dirty {
-		migrator.Force(int(version))
-		migrator.Steps(-1)
+	version, dirty, err := migrator.Version()
+	if err == nil && version > 0 && dirty {
+		if err := migrator.Force(int(version)); err != nil {
+			return err
+		}
+
+		if err := migrator.Steps(-1); err != nil {
+			return err
+		}
 	}
 
 	config.SuccessColor.Printf("Migration rolled back to %s on %s schema %s\n", config.BoldColor.Sprint(version), config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))

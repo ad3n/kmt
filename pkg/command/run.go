@@ -3,6 +3,8 @@ package command
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -10,14 +12,14 @@ import (
 )
 
 type run struct {
-	config config.Migration
+	config *config.Migration
 }
 
-func NewRun(config config.Migration) run {
-	return run{config: config}
+func NewRun(config *config.Migration) *run {
+	return &run{config: config}
 }
 
-func (r run) Call(source string, schema string, step int) error {
+func (r *run) Call(source string, schema string, step int) error {
 	if step <= 0 {
 		config.ErrorColor.Println("Invalid step")
 
@@ -44,19 +46,20 @@ func (r run) Call(source string, schema string, step int) error {
 
 		return nil
 	}
+	defer db.Close()
 
-	files, err := os.ReadDir(fmt.Sprintf("%s/%s", r.config.Folder, schema))
+	migrationFolder := filepath.Join(r.config.Folder, schema)
+	files, err := os.ReadDir(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, fmt.Sprintf("%s/%s", r.config.Folder, schema))
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
 	version, _, _ := migrator.Version()
 	valid := false
-
-	migrations := []string{}
+	migrations := make([]string, 0, len(files)/2)
 	number := 0
 	for i, file := range files {
 		if i%2 == 0 {
@@ -71,7 +74,7 @@ func (r run) Call(source string, schema string, step int) error {
 		}
 
 		if valid && number < step {
-			migrations = append(migrations, fmt.Sprintf("%d", s))
+			migrations = append(migrations, strconv.Itoa(s))
 
 			number++
 		}

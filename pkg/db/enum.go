@@ -10,12 +10,12 @@ type enum struct {
 	db *sql.DB
 }
 
-func NewEnum(db *sql.DB) enum {
-	return enum{db: db}
+func NewEnum(db *sql.DB) *enum {
+	return &enum{db: db}
 }
 
-func (s enum) GenerateDdl(schema string) <-chan Migration {
-	cMigration := make(chan Migration)
+func (s *enum) GenerateDdl(schema string) <-chan *Migration {
+	cMigration := make(chan *Migration)
 	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_ENUM, schema))
 	if err != nil {
 		fmt.Println(err.Error())
@@ -23,7 +23,7 @@ func (s enum) GenerateDdl(schema string) <-chan Migration {
 		return cMigration
 	}
 
-	go func(result *sql.Rows, channel chan<- Migration) {
+	go func(result *sql.Rows, channel chan<- *Migration) {
 		for result.Next() {
 			var name string
 			var values string
@@ -40,7 +40,7 @@ func (s enum) GenerateDdl(schema string) <-chan Migration {
 				shortName = sName[1]
 			}
 
-			channel <- Migration{
+			channel <- &Migration{
 				Name:       shortName,
 				UpScript:   s.createDdl(name, values),
 				DownScript: fmt.Sprintf(SECURE_DROP_TYPE, name),
@@ -48,13 +48,14 @@ func (s enum) GenerateDdl(schema string) <-chan Migration {
 		}
 
 		close(channel)
+
 		rows.Close()
 	}(rows, cMigration)
 
 	return cMigration
 }
 
-func (s enum) createDdl(name string, values string) string {
+func (s *enum) createDdl(name string, values string) string {
 	ddl := fmt.Sprintf(SQL_CREATE_ENUM_OPEN, name)
 
 	sV := strings.Split(values, "#")
