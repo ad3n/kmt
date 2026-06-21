@@ -65,7 +65,11 @@ func (u *up) Call(source string, schema string) error {
 	}
 
 	version, dirty, err := migrator.Version()
-	if err == nil && version > 0 && dirty {
+	if err != nil {
+		return err
+	}
+
+	if version > 0 && dirty {
 		if err := migrator.Force(int(version)); err != nil {
 			return err
 		}

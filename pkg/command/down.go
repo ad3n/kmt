@@ -57,10 +57,19 @@ func (d *down) Call(source string, schema string) error {
 		return nil
 	}
 
-	version, dirty, _ := migrator.Version()
-	if version != 0 && dirty {
-		migrator.Force(int(version))
-		migrator.Steps(-1)
+	version, dirty, err := migrator.Version()
+	if err != nil {
+		return err
+	}
+
+	if version > 0 && dirty {
+		if err := migrator.Force(int(version)); err != nil {
+			return err
+		}
+
+		if err := migrator.Steps(-1); err != nil {
+			return err
+		}
 	}
 
 	progress.Stop()
