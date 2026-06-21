@@ -67,7 +67,7 @@ func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migr
 }
 
 func Parse(path string) *Config {
-	config := &Config{}
+	config := Config{}
 	c, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatalf("Kmtfile.yml not found")
@@ -112,5 +112,5 @@ func Parse(path string) *Config {
 		}
 	}
 
-	return config
+	return &config
 }
