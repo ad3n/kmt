@@ -6,7 +6,7 @@ Manage postgresql cluster migration easly
 
 - Postgresql 9.5 or above
 
-- Go 1.24 or above
+- Go 1.25 or above
 
 - `pg_dump` (optional) to support reverse migration
 
@@ -48,7 +48,7 @@ Manage postgresql cluster migration easly
 
 - `kmt down <connection> <schema>` to drop migration(s) from database and schema
 
-- `kmt generate <schema>` to reverse migration from your `source` database
+- `kmt generate <schema> [<table>|<view>|<function>|<materialize_view>]` to reverse migration from your `source` database
 
 - `kmt rollback <connection> <schema> <step>` to rollback migration version from database and schema
 
@@ -62,9 +62,9 @@ Manage postgresql cluster migration easly
 
 - `kmt version <connection> <schema>` to show migration version on database and schema
 
-- `kmt compare <connection1> <connection2>` to compare migration from databases
+- `kmt compare <connection1> <connection2> [<schema>]` to compare migration from databases
 
-- `kmt inspect <table> <schema> <connection1> [<connection2>]` to inspect table on specific schema
+- `kmt inspect <table> <schema> <connection1> [<connection2> ...]` to inspect table on specific schema
 
 - `kmt make <schema> <connection_source> <connection_destination>` to make `schema` on `destination` has same version with the `source`
 

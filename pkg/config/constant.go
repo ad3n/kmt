@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	VERSION_STRING = "v2.5.3"
+	VERSION_STRING = "v2.6.0"
 
 	SPINER_INDEX    = 9
 	SPINER_DURATION = 77 * time.Millisecond

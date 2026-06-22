@@ -14,36 +14,19 @@ func NewView(db *sql.DB) *view {
 }
 
 func (s *view) GenerateDdl(schema string) <-chan *Migration {
-	cMigration := make(chan *Migration)
-	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_VIEW, schema))
-	if err != nil {
-		fmt.Println(err.Error())
+	return streamMigration(s.db, fmt.Sprintf(QUERY_LIST_VIEW, schema), func(rows *sql.Rows) (*Migration, error) {
+		definition := Definition{}
+		err := rows.Scan(&definition.Name, &definition.Value)
+		if err != nil {
+			fmt.Println(err.Error())
 
-		return cMigration
-	}
-
-	go func(result *sql.Rows, channel chan<- *Migration) {
-		for result.Next() {
-			var name string
-			var definition string
-			err = result.Scan(&name, &definition)
-			if err != nil {
-				fmt.Println(err.Error())
-
-				continue
-			}
-
-			channel <- &Migration{
-				Name:       name,
-				UpScript:   fmt.Sprintf(SECURE_CREATE_VIEW, name, definition),
-				DownScript: fmt.Sprintf(SECURE_DROP_VIEW, name),
-			}
+			return nil, err
 		}
 
-		close(channel)
-
-		rows.Close()
-	}(rows, cMigration)
-
-	return cMigration
+		return &Migration{
+			Name:       definition.Name,
+			UpScript:   fmt.Sprintf(SECURE_CREATE_VIEW, definition.Name, definition.Value),
+			DownScript: fmt.Sprintf(SECURE_DROP_VIEW, definition.Name),
+		}, nil
+	})
 }

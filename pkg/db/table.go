@@ -12,6 +12,26 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
+var (
+	reReference = regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk|pkey|pk`)
+	reForeign   = regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk`)
+
+	ddlReplacer = strings.NewReplacer(
+		CREATE_TABLE, SECURE_CREATE_TABLE,
+		CREATE_SEQUENCE, SECURE_CREATE_SEQUENCE,
+		CREATE_INDEX, SECURE_CREATE_INDEX,
+	)
+
+	upScript            strings.Builder
+	downScript          strings.Builder
+	upReferenceScript   strings.Builder
+	downReferenceScript strings.Builder
+	upForeignScript     strings.Builder
+	downForeignScript   strings.Builder
+	insertScript        strings.Builder
+	deleteScript        strings.Builder
+)
+
 type (
 	Table struct {
 		db      *sql.DB
@@ -37,28 +57,23 @@ func (t *Table) Detail(table string) (map[string]*Column, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	result := make(map[string]*Column)
+
 	for rows.Next() {
-		var columnName string
-		var defaultValue string
-		var nullable string
-		var dataType string
-		err = rows.Scan(&columnName, &defaultValue, &nullable, &dataType)
-		if err != nil {
+		column := Column{}
+		if err := rows.Scan(&column.Name, &column.DefaultValue, &column.NullableText, &column.DataType); err != nil {
 			return nil, err
 		}
 
-		column := &Column{
-			DefaultValue: defaultValue,
-			DataType:     dataType,
-		}
+		column.Nullable = column.NullableText != "no"
 
-		if nullable != "no" {
-			column.Nullable = true
-		}
+		result[column.Name] = &column
+	}
 
-		result[columnName] = column
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return result, nil
@@ -91,17 +106,9 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	}
 
 	cli := exec.Command(t.command, options...)
-	cli.Env = os.Environ()
-	cli.Env = append(cli.Env, fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
 
-	var upScript strings.Builder
-	var downScript strings.Builder
-	var upReferenceScript strings.Builder
-	var downReferenceScript strings.Builder
-	var upForeignScript strings.Builder
-	var downForeignScript strings.Builder
-	var insertScript strings.Builder
-	var deleteScript strings.Builder
+	cli.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
+
 	var skip bool = false
 	var waitForSemicolon bool = false
 
@@ -206,19 +213,7 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	return &Ddl{
 		Name: strings.ReplaceAll(name, ".", "_"),
 		Definition: &Migration{
-			UpScript: strings.ReplaceAll(
-				strings.ReplaceAll(
-					strings.ReplaceAll(
-						upScript.String(),
-						CREATE_TABLE,
-						SECURE_CREATE_TABLE,
-					),
-					CREATE_SEQUENCE,
-					SECURE_CREATE_SEQUENCE,
-				),
-				CREATE_INDEX,
-				SECURE_CREATE_INDEX,
-			),
+			UpScript:   ddlReplacer.Replace(upScript.String()),
 			DownScript: downScript.String(),
 		},
 		Insert: &Migration{
@@ -236,36 +231,45 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	}
 }
 
-func (t Table) primaryKey(name string) string {
+func (t *Table) primaryKey(name string) string {
 	tables := strings.Split(name, ".")
-	rows, err := t.db.Query(fmt.Sprintf(QUERY_GET_PRIMARY_KEY, tables[0], tables[1]))
-	if err != nil {
-		fmt.Println(err.Error())
-
+	if len(tables) != 2 {
 		return ""
 	}
 
-	for rows.Next() {
-		err = rows.Scan(&name)
-		if err != nil {
-			fmt.Println(err.Error())
+	var pk string
 
-			break
-		}
+	err := t.db.QueryRow(fmt.Sprintf(QUERY_GET_PRIMARY_KEY, tables[0], tables[1])).Scan(&pk)
+	if err != nil {
+		return ""
 	}
 
-	return name
+	return pk
 }
 
 func (Table) keyValue(line string, name string, between bool) string {
-	line = strings.TrimLeft(line, fmt.Sprintf(SQL_INSERT_INTO_START, name))
+	line = strings.TrimPrefix(line, fmt.Sprintf(SQL_INSERT_INTO_START, name))
 	if between {
-		line = strings.TrimRight(line, SQL_INSERT_INTO_CLOSE)
+		line = strings.TrimSuffix(line, SQL_INSERT_INTO_CLOSE)
 	}
 
-	v := strings.Split(line, ",")
+	return firstValue(line)
+}
 
-	return v[0]
+func firstValue(values string) string {
+	inQuote := false
+	for i, r := range values {
+		switch r {
+		case '\'':
+			inQuote = !inQuote
+		case ',':
+			if !inQuote {
+				return strings.TrimSpace(values[:i])
+			}
+		}
+	}
+
+	return strings.TrimSpace(values)
 }
 
 func (Table) skip(line string) bool {
@@ -284,16 +288,12 @@ func (Table) downScript(line string) bool {
 	return strings.Contains(line, "DROP")
 }
 
-func (t Table) downReferenceScript(line string) bool {
-	regex := regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk|pkey|pk`)
-
-	return regex.MatchString(line)
+func (Table) downReferenceScript(line string) bool {
+	return reReference.MatchString(line)
 }
 
 func (Table) downForeignkey(line string) bool {
-	regex := regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk`)
-
-	return regex.MatchString(line)
+	return reForeign.MatchString(line)
 }
 
 func (Table) foreignScript(line string) bool {
@@ -301,6 +301,10 @@ func (Table) foreignScript(line string) bool {
 }
 
 func (Table) refereceScript(line string, n int, lines []string) bool {
+	if n+1 >= len(lines) {
+		return false
+	}
+
 	return strings.Contains(line, ALTER_TABLE) && strings.Contains(lines[n+1], ADD_CONSTRAINT)
 }
 

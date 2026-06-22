@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"slices"
 )
 
 type (
@@ -35,12 +34,23 @@ func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan 
 	if err != nil {
 		fmt.Println(err.Error())
 
+		close(cTable)
+
 		return cTable
 	}
 
+	excludeMap := make(map[string]struct{}, len(excludes))
+	for _, e := range excludes {
+		excludeMap[e] = struct{}{}
+	}
+
 	go func(result *sql.Rows, channel chan<- string) {
+		defer close(cTable)
+		defer rows.Close()
+
 		for result.Next() {
 			var table string
+
 			err = result.Scan(&table)
 			if err != nil {
 				fmt.Println(err.Error())
@@ -48,17 +58,16 @@ func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan 
 				continue
 			}
 
-			skip := slices.Contains(excludes, table)
-			if !skip {
-				channel <- table
-
-				skip = false
+			if _, skip := excludeMap[table]; skip {
+				continue
 			}
+
+			cTable <- table
 		}
 
-		close(channel)
-
-		rows.Close()
+		if err := rows.Err(); err != nil {
+			fmt.Println(err.Error())
+		}
 	}(rows, cTable)
 
 	return cTable

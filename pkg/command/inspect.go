@@ -37,69 +37,50 @@ func (i *inspect) Describe(table string, schema string, connection string) map[s
 	return result
 }
 
-func (i *inspect) Compare(table string, schema string, db1 string, db2 string) map[string]*db.Compare {
-	cfg, ok := i.config.Connections[db1]
-	if !ok {
-		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(db1))
+func (i *inspect) Compare(table string, schema string, dbs ...string) map[string]*db.Inspect {
+	compare := make(map[string]*db.Inspect)
 
-		return nil
-	}
+	for _, dbName := range dbs {
+		cfg, ok := i.config.Connections[dbName]
+		if !ok {
+			config.ErrorColor.Printf(
+				"Database connection '%s' not found\n",
+				config.BoldColor.Sprint(dbName),
+			)
 
-	conn, err := config.NewConnection(cfg)
-	if err != nil {
-		return nil
-	}
-	defer conn.Close()
-
-	compare := map[string]*db.Compare{}
-
-	tdb1, err := db.NewTable("", cfg, conn).Detail(table)
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return nil
-	}
-
-	for k, v := range tdb1 {
-		compare[k] = &db.Compare{
-			Table1: &db.Column{
-				DataType:     v.DataType,
-				DefaultValue: v.DefaultValue,
-				Nullable:     v.Nullable,
-			},
-			Table2: &db.Column{},
-		}
-	}
-
-	cfg, ok = i.config.Connections[db2]
-	if !ok {
-		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(db2))
-
-		return nil
-	}
-
-	conn, err = config.NewConnection(cfg)
-	if err != nil {
-		return nil
-	}
-	defer conn.Close()
-
-	tdb2, err := db.NewTable("", cfg, conn).Detail(table)
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return nil
-	}
-
-	for k, v := range tdb2 {
-		cmp := compare[k]
-		cmp.Table2 = &db.Column{
-			DataType:     v.DataType,
-			DefaultValue: v.DefaultValue,
-			Nullable:     v.Nullable,
+			continue
 		}
 
-		compare[k] = cmp
+		conn, err := config.NewConnection(cfg)
+		if err != nil {
+			continue
+		}
+
+		func() {
+			defer conn.Close()
+
+			detail, err := db.NewTable("", cfg, conn).Detail(table)
+			if err != nil {
+				config.ErrorColor.Println(err.Error())
+				return
+			}
+
+			for colName, col := range detail {
+				cmp, ok := compare[colName]
+				if !ok {
+					cmp = &db.Inspect{
+						Tables: make(map[string]*db.Column),
+					}
+					compare[colName] = cmp
+				}
+
+				cmp.Tables[dbName] = &db.Column{
+					DataType:     col.DataType,
+					DefaultValue: col.DefaultValue,
+					Nullable:     col.Nullable,
+				}
+			}
+		}()
 	}
 
 	return compare

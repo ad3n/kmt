@@ -1,6 +1,17 @@
 package db
 
+import (
+	"database/sql"
+	"fmt"
+)
+
 type (
+	Definition struct {
+		Name  string
+		Value string
+		Param string
+	}
+
 	Migration struct {
 		Name       string
 		UpScript   string
@@ -8,14 +19,15 @@ type (
 	}
 
 	Column struct {
+		Name         string
 		DefaultValue string
 		DataType     string
+		NullableText string
 		Nullable     bool
 	}
 
-	Compare struct {
-		Table1 *Column
-		Table2 *Column
+	Inspect struct {
+		Tables map[string]*Column
 	}
 
 	Migrate interface {
@@ -164,3 +176,31 @@ FROM information_schema.columns
 WHERE table_name = '%s'
 ORDER BY ordinal_position;`
 )
+
+func streamMigration(db *sql.DB, query string, builder func(*sql.Rows) (*Migration, error)) <-chan *Migration {
+	ch := make(chan *Migration)
+	rows, err := db.Query(query)
+	if err != nil {
+		close(ch)
+
+		return ch
+	}
+
+	go func() {
+		defer close(ch)
+		defer rows.Close()
+
+		for rows.Next() {
+			item, err := builder(rows)
+			if err != nil {
+				fmt.Println(err.Error())
+
+				continue
+			}
+
+			ch <- item
+		}
+	}()
+
+	return ch
+}

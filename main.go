@@ -201,7 +201,7 @@ func main() {
 			{
 				Name:        "generate",
 				Aliases:     []string{"gn"},
-				Description: "generate [<schema>]",
+				Description: "generate <schema> [<table>|<view>|<function>|<materialize_view>]",
 				Usage:       "Generate migrations from existing database (reverse migration)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					source, ok := cfg.Migration.Connections[cfg.Migration.Source]
@@ -216,25 +216,66 @@ func main() {
 					defer db.Close()
 
 					cmdGenerate := command.NewGenerate(cfg.Migration, db)
-					if cmd.NArg() == 1 {
-						return cmdGenerate.Call(cmd.Args().Get(0))
+					args := cmd.Args().Slice()
+					if len(args) == 0 {
+						for schema := range source.Schemas {
+							cmdGenerate.Call(schema, &command.GenerateScope{
+								Tables:            true,
+								Functions:         true,
+								Views:             true,
+								MaterializedViews: true,
+								Enums:             true,
+							})
+						}
+
+						return nil
 					}
 
-					for k := range source.Schemas {
-						cmdGenerate.Call(k)
+					schema := args[0]
+					scope := &command.GenerateScope{
+						Tables:            true,
+						Functions:         true,
+						Views:             true,
+						MaterializedViews: true,
+						Enums:             true,
 					}
 
-					return nil
+					if len(args) > 1 {
+						switch args[1] {
+						case "table":
+							scope.Functions = false
+							scope.Views = false
+							scope.MaterializedViews = false
+							scope.Enums = false
+						case "function":
+							scope.Tables = false
+							scope.Views = false
+							scope.MaterializedViews = false
+							scope.Enums = false
+						case "view":
+							scope.Tables = false
+							scope.Functions = false
+							scope.MaterializedViews = false
+							scope.Enums = false
+						case "materialized_view":
+							scope.Tables = false
+							scope.Functions = false
+							scope.Views = false
+							scope.Enums = false
+						}
+					}
+
+					return cmdGenerate.Call(schema, scope)
 				},
 			},
 			{
 				Name:        "version",
 				Aliases:     []string{"v"},
-				Description: "version <connection>/<cluster> [<schema>]",
+				Description: "version <connection>|<cluster> [<schema>]",
 				Usage:       "Show migration version",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 1 {
-						return errors.New("not enough arguments. Usage: kmt version <connection>/<cluster> [<schema>]")
+						return errors.New("not enough arguments. Usage: kmt version <connection>|<cluster> [<schema>]")
 					}
 
 					cmdVersion := command.NewVersion(cfg.Migration)
@@ -334,11 +375,11 @@ func main() {
 			{
 				Name:        "compare",
 				Aliases:     []string{"c"},
-				Description: "compare <source> <compare> [<schema>]",
+				Description: "compare <connection1> <connection2> [<schema>]",
 				Usage:       "Compare migration from dbs",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 2 {
-						return errors.New("not enough arguments. Usage: kmt compare <source> <compare> [<schema>]")
+						return errors.New("not enough arguments. Usage: kmt compare <connection1> <connection2> [<schema>]")
 					}
 
 					cmdCompare := command.NewCompare(cfg.Migration)
@@ -441,7 +482,7 @@ func main() {
 			{
 				Name:        "inspect",
 				Aliases:     []string{"d"},
-				Description: "inspect <table> <schema> <connection1> [<connection>]",
+				Description: "inspect <table> <schema> <connection1> [<connection2> ...]",
 				Usage:       "Inspect table on specific schema",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "dump", Aliases: []string{"d"}},
@@ -482,48 +523,68 @@ func main() {
 						return nil
 					}
 
-					columns := cmdInspect.Compare(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2), cmd.Args().Get(3))
+					columns := cmdInspect.Compare(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Slice()[2:]...)
+					args := cmd.Args().Slice()
+					dbs := args[2:]
+					headers := []string{"NO", "NAME"}
+					subHeaders := []string{"NO", "NAME"}
+					colSpans := []int{1, 1}
 
-					t.SetHeaders("NO", "NAME", strings.ToUpper(cmd.Args().Get(2)), strings.ToUpper(cmd.Args().Get(3)))
-					t.AddHeaders("NO", "NAME", "DATA TYPE", "NULL?", "DEFAULT", "DATA TYPE", "NULL?", "DEFAULT")
-					t.SetHeaderColSpans(0, 1, 1, 3, 3)
+					for _, db := range dbs {
+						headers = append(headers, strings.ToUpper(db))
+						subHeaders = append(subHeaders, "DATA TYPE", "NULL?", "DEFAULT")
+						colSpans = append(colSpans, 3)
+					}
+
+					t.SetHeaders(headers...)
+					t.AddHeaders(subHeaders...)
+					t.SetHeaderColSpans(0, colSpans...)
 					t.SetAutoMergeHeaders(true)
 
 					number := 1
-					for k, v := range columns {
+					for columnName, compare := range columns {
 						num := color.New(color.Bold).Sprint(number)
-						if v.Table1.DataType == "" {
-							v.Table1.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
-							v.Table1.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
+						name := columnName
+						row := []string{num, name}
+
+						var (
+							first     *db.Column
+							different bool
+						)
+
+						for _, dbName := range dbs {
+							col := compare.Tables[dbName]
+							if col == nil {
+								col = &db.Column{
+									DataType:     color.New(color.FgRed, color.Bold).Sprint("x"),
+									DefaultValue: color.New(color.FgRed, color.Bold).Sprint("x"),
+								}
+							}
+
+							if first == nil {
+								first = col
+							}
+
+							if first.DataType != col.DataType ||
+								first.Nullable != col.Nullable ||
+								first.DefaultValue != col.DefaultValue {
+								different = true
+							}
+
+							status := color.New(color.FgRed, color.Bold).Sprint("x")
+							if col.Nullable {
+								status = color.New(color.FgGreen).Sprint("v")
+							}
+
+							row = append(row, col.DataType, status, col.DefaultValue)
 						}
 
-						if v.Table2.DataType == "" {
-							v.Table2.DataType = color.New(color.FgRed, color.Bold).Sprint("x")
-							v.Table2.DefaultValue = color.New(color.FgRed, color.Bold).Sprint("x")
+						if different {
+							row[0] = color.New(color.FgRed, color.Bold).Sprint(number)
+							row[1] = color.New(color.FgRed, color.Bold).Sprint(columnName)
 						}
 
-						if v.Table1.DataType != v.Table2.DataType ||
-							v.Table1.Nullable != v.Table2.Nullable ||
-							v.Table1.DefaultValue != v.Table2.DefaultValue {
-							k = color.New(color.FgRed, color.Bold).Sprint(k)
-							num = color.New(color.FgRed, color.Bold).Sprint(number)
-						}
-
-						var status1 string
-						var status2 string
-						if v.Table1.Nullable {
-							status1 = color.New(color.FgGreen).Sprint("v")
-						} else {
-							status1 = color.New(color.FgRed, color.Bold).Sprint("x")
-						}
-
-						if v.Table2.Nullable {
-							status2 = color.New(color.FgGreen).Sprint("v")
-						} else {
-							status2 = color.New(color.FgRed, color.Bold).Sprint("x")
-						}
-
-						t.AddRow(num, k, v.Table1.DataType, status1, v.Table1.DefaultValue, v.Table2.DataType, status2, v.Table2.DefaultValue)
+						t.AddRow(row...)
 
 						number++
 					}
@@ -532,36 +593,49 @@ func main() {
 
 					dump := cmd.Bool("dump")
 					if dump {
-						var sql string
-						for k, v := range columns {
-							if v.Table1.DataType == "" {
-								if sql == "" {
-									sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
+						reference := dbs[0]
+						for _, target := range dbs[1:] {
+							var sql string
+							for columnName, compare := range columns {
+								ref := compare.Tables[reference]
+								dst := compare.Tables[target]
+								if ref != nil && dst == nil {
+									if sql == "" {
+										sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
+									}
+
+									var nullable string
+									if !ref.Nullable {
+										nullable = " NOT NULL"
+									}
+
+									var defaultValue string
+									if ref.DefaultValue != "" {
+										defaultValue = fmt.Sprintf(" DEFAULT %s", ref.DefaultValue)
+									}
+
+									sql += fmt.Sprintf(db.ADD_COLUMN, columnName, ref.DataType, nullable, defaultValue)
 								}
 
-								var nullable string
-								if !v.Table2.Nullable {
-									nullable = " NOT NULL"
-								}
+								if ref == nil && dst != nil {
+									if sql == "" {
+										sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
+									}
 
-								var defaultValue string
-								if v.Table2.DefaultValue != "" {
-									defaultValue = fmt.Sprintf(" default %s", v.Table2.DefaultValue)
+									sql += fmt.Sprintf(db.REMOVE_COLUMN, columnName)
 								}
-
-								sql = sql + fmt.Sprintf(db.ADD_COLUMN, k, v.Table2.DataType, nullable, defaultValue)
 							}
 
-							if v.Table2.DataType == "" {
-								if sql == "" {
-									sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
-								}
+							if sql != "" {
+								color.New(color.FgYellow, color.Bold).Printf(
+									"\n-- Sync %s -> %s\n",
+									reference,
+									target,
+								)
 
-								sql = sql + fmt.Sprintf(db.REMOVE_COLUMN, k)
+								color.New(color.FgGreen).Println(sql)
 							}
 						}
-
-						color.New(color.FgGreen).Print(sql)
 					}
 
 					return nil

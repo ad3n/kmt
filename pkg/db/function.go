@@ -14,37 +14,19 @@ func NewFunction(db *sql.DB) *function {
 }
 
 func (s *function) GenerateDdl(schema string) <-chan *Migration {
-	cMigration := make(chan *Migration)
-	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_FUNCTION, schema))
-	if err != nil {
-		fmt.Println(err.Error())
+	return streamMigration(s.db, fmt.Sprintf(QUERY_LIST_FUNCTION, schema), func(rows *sql.Rows) (*Migration, error) {
+		definition := Definition{}
+		err := rows.Scan(&definition.Name, &definition.Value, &definition.Param)
+		if err != nil {
+			fmt.Println(err.Error())
 
-		return cMigration
-	}
-
-	go func(result *sql.Rows, channel chan<- *Migration) {
-		for result.Next() {
-			var name string
-			var definition string
-			var params string
-			err = result.Scan(&name, &definition, &params)
-			if err != nil {
-				fmt.Println(err.Error())
-
-				continue
-			}
-
-			channel <- &Migration{
-				Name:       name,
-				UpScript:   fmt.Sprintf("%s;", definition),
-				DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, name, params),
-			}
+			return nil, err
 		}
 
-		close(channel)
-
-		rows.Close()
-	}(rows, cMigration)
-
-	return cMigration
+		return &Migration{
+			Name:       definition.Name,
+			UpScript:   fmt.Sprintf("%s;", definition.Value),
+			DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, definition.Name, definition.Param),
+		}, nil
+	})
 }
