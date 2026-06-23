@@ -18,7 +18,7 @@ func NewSchema(db *sql.DB) *schema {
 func (s *schema) CountTable(name string, nExcludes int) int {
 	var total int
 
-	err := s.db.QueryRow(fmt.Sprintf(QUERY_COUNT_TABLE, name), nil).Scan(&total)
+	err := s.db.QueryRow(fmt.Sprintf(QUERY_COUNT_TABLE, name)).Scan(&total)
 	if err != nil {
 		fmt.Println(err.Error())
 

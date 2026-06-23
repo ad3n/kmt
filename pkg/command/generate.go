@@ -88,10 +88,7 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 
 	progress.Stop()
 
-	config.SuccessColor.Printf(
-		"Migration generation on schema %s run successfully\n",
-		config.BoldColor.Sprint(schema),
-	)
+	config.SuccessColor.Printf("Migration generation on schema %s run successfully\n", config.BoldColor.Sprint(schema))
 
 	return nil
 }
