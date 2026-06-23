@@ -34,7 +34,7 @@ func main() {
 				Description: "sync <connection> <cluster> <schema>",
 				Usage:       "Set the <cluster> <schema> to <connection> version",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 3 {
+					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt sync <connection> <cluster> <schema>")
 					}
 
@@ -46,7 +46,7 @@ func main() {
 				Description: "up <connection> <schema>",
 				Usage:       "Migration up",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 2 {
+					if cmd.NArg() < 2 {
 						return errors.New("not enough arguments. Usage: kmt up <connection> <schema>")
 					}
 
@@ -59,7 +59,7 @@ func main() {
 				Description: "make <schema> <connection> <destination>",
 				Usage:       "Make <schema> on the <destination> has same version with the <connection>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 3 {
+					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt make <schema> <connection> <destination>")
 					}
 
@@ -72,7 +72,7 @@ func main() {
 				Description: "rollback <connection> <schema> <step>",
 				Usage:       "Rollback migration on <connection> <schema> for <step> step(s)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 3 {
+					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt rollback <connection> <schema> <step>")
 					}
 
@@ -92,7 +92,7 @@ func main() {
 				Description: "run <connection> <schema> <step>",
 				Usage:       "Run migration on <connection> <schema> for <step> step(s)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 3 {
+					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt run <connection> <schema> <step>")
 					}
 
@@ -112,7 +112,7 @@ func main() {
 				Description: "set <connection> <schema> <version>",
 				Usage:       "Set migration on <connection> <schema> to <version> without running migration file(s)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 3 {
+					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt set <connection> <schema> <version>")
 					}
 
@@ -132,7 +132,7 @@ func main() {
 				Description: "migrate <connection> <schema> <version>",
 				Usage:       "Migrate <connection> <schema> to specific <version>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 3 {
+					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt migrate <connection> <schema> <version>")
 					}
 
@@ -152,7 +152,7 @@ func main() {
 				Description: "down <connection> <schema>",
 				Usage:       "Downing migration on <connection> <schema>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 2 {
+					if cmd.NArg() < 2 {
 						return errors.New("not enough arguments. Usage: kmt down <connection> <schema>")
 					}
 
@@ -165,7 +165,7 @@ func main() {
 				Description: "drop <connection> <schema>",
 				Usage:       "Dropping migration on <connection> <schema>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 2 {
+					if cmd.NArg() < 2 {
 						return errors.New("not enough arguments. Usage: kmt drop <connection> <schema>")
 					}
 
@@ -178,7 +178,7 @@ func main() {
 				Description: "clean <connection> <schema>",
 				Usage:       "Clean dirty migration on <connection> <schema>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 2 {
+					if cmd.NArg() < 2 {
 						return errors.New("not enough arguments. Usage: kmt clean <connection> <schema>")
 					}
 
@@ -191,7 +191,7 @@ func main() {
 				Description: "create <schema> <name>",
 				Usage:       "Create new migration files for <schema> with name <name>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 2 {
+					if cmd.NArg() < 2 {
 						return errors.New("not enough arguments. Usage: kmt create <schema> <name>")
 					}
 
@@ -204,7 +204,7 @@ func main() {
 				Description: "generate <connection> [<schema> [<table>|<view>|<function>|<materialize_view>]",
 				Usage:       "Generate migrations from <connection> on <schema> with options [<table>|<view>|<function>|<materialize_view>]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 1 {
+					if cmd.NArg() < 1 {
 						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [<table>|<view>|<function>|<materialize_view>]")
 					}
 
