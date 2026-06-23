@@ -26,7 +26,6 @@ type (
 		Connections map[string]*Connection `yaml:"connections"`
 		PgDump      string                 `yaml:"pg_dump"`
 		Folder      string                 `yaml:"folder"`
-		Source      string                 `yaml:"source"`
 	}
 
 	Connection struct {
@@ -84,10 +83,6 @@ func Parse(path string) *Config {
 
 	if config.Migration.Folder == "" {
 		config.Migration.Folder = "migrations"
-	}
-
-	if config.Migration.Source == "" {
-		config.Migration.Source = "source"
 	}
 
 	for k, cs := range config.Migration.Connections {

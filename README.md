@@ -46,27 +46,31 @@ Manage postgresql cluster migration easly
 
 - `kmt up <connection> <schema>` to deploy migration(s) from database and schema
 
-- `kmt down <connection> <schema>` to drop migration(s) from database and schema
+- `kmt down <connection> <schema>` to down migration(s) from database and schema
 
-- `kmt generate <schema> [<table>|<view>|<function>|<materialize_view>]` to reverse migration from your `source` database
+- `kmt drop <connection> <schema>` to drop migration(s) from database and schema
+
+- `kmt generate <connection> [<schema> [<table>|<view>|<function>|<materialize_view>]` to reverse migration from your `source` database
 
 - `kmt rollback <connection> <schema> <step>` to rollback migration version from database and schema
 
 - `kmt run <connection> <schema> <step>` to run migration version from database and schema
 
-- `kmt sync <cluster> <schema>` to sync migration in cluster for schema
+- `kmt sync <connection> <cluster> <schema>` to sync migration in cluster for schema
 
-- `kmt set <connection> <schema> <version>` to set migration to specific version
+- `kmt set <connection> <schema> <version>` to set migration to specific version without running migration file(s)
+
+- `kmt migrate <connection> <schema> <version>` to set migration to specific version
 
 - `kmt clean <connection> <schema>` to clean migration on database and schema
 
-- `kmt version <connection> <schema>` to show migration version on database and schema
+- `kmt version <connection>|<cluster> [<schema>]` to show migration version on cluster/database and schema
 
 - `kmt compare <connection1> <connection2> [<schema>]` to compare migration from databases
 
 - `kmt inspect <table> <schema> <connection1> [<connection2> ...]` to inspect table on specific schema
 
-- `kmt make <schema> <connection_source> <connection_destination>` to make `schema` on `destination` has same version with the `source`
+- `kmt make <schema> <connection> <destination>` to make `schema` on `destination` has same version with the `source`
 
 - `kmt test` to test configuration
 

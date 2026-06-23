@@ -47,12 +47,12 @@ func NewGenerate(config *config.Migration, connection *sql.DB) *generate {
 	}
 }
 
-func (g *generate) Call(schema string, scope *GenerateScope) error {
+func (g *generate) Call(connection string, schema string, scope *GenerateScope) error {
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 
-	source, ok := g.config.Connections[g.config.Source]
+	source, ok := g.config.Connections[connection]
 	if !ok {
-		config.ErrorColor.Printf("Config for '%s' not found", g.config.Source)
+		config.ErrorColor.Printf("Config for '%s' not found", connection)
 		return nil
 	}
 
@@ -71,7 +71,7 @@ func (g *generate) Call(schema string, scope *GenerateScope) error {
 	}
 
 	if scope.Tables {
-		version = g.generateTables(schema, schemaConfig, migrationFolder, version, scope)
+		version = g.generateTables(connection, schema, schemaConfig, migrationFolder, version, scope)
 	}
 
 	if scope.Functions {
@@ -181,6 +181,7 @@ func (g *generate) generateMaterializedViews(schema, folder string, version int6
 }
 
 func (g *generate) generateTables(
+	connection string,
 	schema string,
 	schemaConfig map[string][]string,
 	folder string,
@@ -191,7 +192,7 @@ func (g *generate) generateTables(
 	schemaTool := db.NewSchema(g.connection)
 	cTable := schemaTool.ListTable(nWorker, schema, schemaConfig["excludes"]...)
 	tTable := schemaTool.CountTable(schema, len(schemaConfig["excludes"]))
-	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[g.config.Source], g.connection)
+	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[connection], g.connection)
 	cDdl := make(chan *db.Ddl, nWorker)
 	cInsert := make(chan *db.Ddl, nWorker)
 	cMigration := make(chan *migration, nWorker)

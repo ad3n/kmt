@@ -31,14 +31,14 @@ func main() {
 			{
 				Name:        "sync",
 				Aliases:     []string{"sy"},
-				Description: "sync <cluster> <schema>",
-				Usage:       "Set the cluster to latest version",
+				Description: "sync <connection> <cluster> <schema>",
+				Usage:       "Set the <cluster> <schema> to <connection> version",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 2 {
-						return errors.New("not enough arguments. Usage: kmt sync <cluster> <schema>")
+					if cmd.NArg() != 3 {
+						return errors.New("not enough arguments. Usage: kmt sync <connection> <cluster> <schema>")
 					}
 
-					return command.NewSync(cfg.Migration).Run(cmd.Args().Get(0), cmd.Args().Get(1))
+					return command.NewSync(cfg.Migration).Run(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2))
 				},
 			},
 			{
@@ -56,11 +56,11 @@ func main() {
 			{
 				Name:        "make",
 				Aliases:     []string{"mk"},
-				Description: "make <schema> <source> <destination>",
-				Usage:       "Make schema on the destination has same version with the source",
+				Description: "make <schema> <connection> <destination>",
+				Usage:       "Make <schema> on the <destination> has same version with the <connection>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
-						return errors.New("not enough arguments. Usage: kmt make <schema> <source> <destination>")
+						return errors.New("not enough arguments. Usage: kmt make <schema> <connection> <destination>")
 					}
 
 					return command.NewCopy(cfg.Migration).Call(cmd.Args().Get(0), cmd.Args().Get(1), cmd.Args().Get(2))
@@ -70,7 +70,7 @@ func main() {
 				Name:        "rollback",
 				Aliases:     []string{"rb"},
 				Description: "rollback <connection> <schema> <step>",
-				Usage:       "Migration rollback",
+				Usage:       "Rollback migration on <connection> <schema> for <step> step(s)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt rollback <connection> <schema> <step>")
@@ -90,7 +90,7 @@ func main() {
 				Name:        "run",
 				Aliases:     []string{"rn"},
 				Description: "run <connection> <schema> <step>",
-				Usage:       "Run migration for n steps",
+				Usage:       "Run migration on <connection> <schema> for <step> step(s)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt run <connection> <schema> <step>")
@@ -110,7 +110,7 @@ func main() {
 				Name:        "set",
 				Aliases:     []string{"st"},
 				Description: "set <connection> <schema> <version>",
-				Usage:       "Set migration to specific version",
+				Usage:       "Set migration on <connection> <schema> to <version> without running migration file(s)",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt set <connection> <schema> <version>")
@@ -130,7 +130,7 @@ func main() {
 				Name:        "migrate",
 				Aliases:     []string{"mg"},
 				Description: "migrate <connection> <schema> <version>",
-				Usage:       "Migrate schema to specific version",
+				Usage:       "Migrate <connection> <schema> to specific <version>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 3 {
 						return errors.New("not enough arguments. Usage: kmt migrate <connection> <schema> <version>")
@@ -150,7 +150,7 @@ func main() {
 				Name:        "down",
 				Aliases:     []string{"dw"},
 				Description: "down <connection> <schema>",
-				Usage:       "Migration down",
+				Usage:       "Downing migration on <connection> <schema>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt down <connection> <schema>")
@@ -163,7 +163,7 @@ func main() {
 				Name:        "drop",
 				Aliases:     []string{"dp"},
 				Description: "drop <connection> <schema>",
-				Usage:       "Drop migration",
+				Usage:       "Dropping migration on <connection> <schema>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt drop <connection> <schema>")
@@ -176,7 +176,7 @@ func main() {
 				Name:        "clean",
 				Aliases:     []string{"cl"},
 				Description: "clean <connection> <schema>",
-				Usage:       "Clean dirty migration",
+				Usage:       "Clean dirty migration on <connection> <schema>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt clean <connection> <schema>")
@@ -189,7 +189,7 @@ func main() {
 				Name:        "create",
 				Aliases:     []string{"cr"},
 				Description: "create <schema> <name>",
-				Usage:       "Create new migration files for schema",
+				Usage:       "Create new migration files for <schema> with name <name>",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 2 {
 						return errors.New("not enough arguments. Usage: kmt create <schema> <name>")
@@ -201,12 +201,17 @@ func main() {
 			{
 				Name:        "generate",
 				Aliases:     []string{"gn"},
-				Description: "generate <schema> [<table>|<view>|<function>|<materialize_view>]",
-				Usage:       "Generate migrations from existing database (reverse migration)",
+				Description: "generate <connection> [<schema> [<table>|<view>|<function>|<materialize_view>]",
+				Usage:       "Generate migrations from <connection> on <schema> with options [<table>|<view>|<function>|<materialize_view>]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					source, ok := cfg.Migration.Connections[cfg.Migration.Source]
+					if cmd.NArg() != 1 {
+						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [<table>|<view>|<function>|<materialize_view>]")
+					}
+
+					connection := cmd.Args().Get(0)
+					source, ok := cfg.Migration.Connections[cmd.Args().Get(0)]
 					if !ok {
-						return fmt.Errorf("source '%s' not found", cfg.Migration.Source)
+						return fmt.Errorf("connection '%s' not found", cmd.Args().Get(0))
 					}
 
 					db, err := config.NewConnection(source)
@@ -219,7 +224,7 @@ func main() {
 					args := cmd.Args().Slice()
 					if len(args) == 0 {
 						for schema := range source.Schemas {
-							cmdGenerate.Call(schema, &command.GenerateScope{
+							cmdGenerate.Call(connection, schema, &command.GenerateScope{
 								Tables:            true,
 								Functions:         true,
 								Views:             true,
@@ -231,7 +236,7 @@ func main() {
 						return nil
 					}
 
-					schema := args[0]
+					schema := args[1]
 					scope := &command.GenerateScope{
 						Tables:            true,
 						Functions:         true,
@@ -240,8 +245,8 @@ func main() {
 						Enums:             true,
 					}
 
-					if len(args) > 1 {
-						switch args[1] {
+					if len(args) > 2 {
+						switch args[2] {
 						case "table":
 							scope.Functions = false
 							scope.Views = false
@@ -265,14 +270,14 @@ func main() {
 						}
 					}
 
-					return cmdGenerate.Call(schema, scope)
+					return cmdGenerate.Call(connection, schema, scope)
 				},
 			},
 			{
 				Name:        "version",
 				Aliases:     []string{"v"},
 				Description: "version <connection>|<cluster> [<schema>]",
-				Usage:       "Show migration version",
+				Usage:       "Show migration version on <connection>|<cluster> [<schema>]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 1 {
 						return errors.New("not enough arguments. Usage: kmt version <connection>|<cluster> [<schema>]")
@@ -376,7 +381,7 @@ func main() {
 				Name:        "compare",
 				Aliases:     []string{"c"},
 				Description: "compare <connection1> <connection2> [<schema>]",
-				Usage:       "Compare migration from dbs",
+				Usage:       "Compare migration <connection1> with <connection2> on [<schema>]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 2 {
 						return errors.New("not enough arguments. Usage: kmt compare <connection1> <connection2> [<schema>]")
@@ -483,13 +488,13 @@ func main() {
 				Name:        "inspect",
 				Aliases:     []string{"d"},
 				Description: "inspect <table> <schema> <connection1> [<connection2> ...]",
-				Usage:       "Inspect table on specific schema",
+				Usage:       "Inspect <table> on <schema> on <connection1> [<connection2> ...]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "dump", Aliases: []string{"d"}},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 3 {
-						return errors.New("not enough arguments. Usage: kmt detail <table> <schema> <connection1> [<connection>]")
+						return errors.New("not enough arguments. Usage: kmt inspect <table> <schema> <connection1> [<connection>]")
 					}
 
 					cmdInspect := command.NewInspect(cfg.Migration)

@@ -18,7 +18,7 @@ func NewSync(config *config.Migration) *sync {
 	return &sync{config: config}
 }
 
-func (s *sync) Run(cluster string, schema string) error {
+func (s *sync) Run(source string, cluster string, schema string) error {
 	lists, ok := s.config.Clusters[cluster]
 	if !ok {
 		config.ErrorColor.Printf("Cluster '%s' isn't defined\n", config.BoldColor.Sprint(cluster))
@@ -50,7 +50,7 @@ func (s *sync) Run(cluster string, schema string) error {
 
 		close(connection)
 		close(name)
-	}(s.config.Source, lists, s.config.Connections, connection, name)
+	}(source, lists, s.config.Connections, connection, name)
 
 	for source := range connection {
 		db, err := config.NewConnection(source)
