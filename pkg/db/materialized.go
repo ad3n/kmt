@@ -14,7 +14,7 @@ func NewMaterializedView(db *sql.DB) *materialized {
 }
 
 func (s *materialized) GenerateDdl(schema string) <-chan *Migration {
-	return streamMigration(s.db, fmt.Sprintf(QUERY_LIST_FUNCTION, schema), func(rows *sql.Rows) (*Migration, error) {
+	return streamMigration(s.db, fmt.Sprintf(QUERY_MATERIALIZED_VIEW, schema), func(rows *sql.Rows) (*Migration, error) {
 		definition := Definition{}
 		err := rows.Scan(&definition.Name, &definition.Value)
 		if err != nil {
