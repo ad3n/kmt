@@ -200,7 +200,7 @@ func (g *generate) generateTables(
 		go do(cMigration, cDdl)
 	}
 
-	go func() {
+	go func(version int64) {
 		defer close(cMigration)
 
 		for tableName := range cTable {
@@ -225,35 +225,35 @@ func (g *generate) generateTables(
 
 			version += 2
 		}
-	}()
+	}(version)
 
-	go func() {
+	version += int64(tTable*2) + 1
+	go func(version int64) {
 		defer close(cInsert)
 
-		versionFK := version + int64(tTable*2) + 1
 		for ddl := range cDdl {
 			cInsert <- ddl
 
-			g.writeForeignKey(folder, ddl, versionFK)
+			g.writeForeignKey(folder, ddl, version)
 
-			versionFK++
+			version++
 		}
-	}()
+	}(version)
 
-	versionInsert := version + int64(tTable*2) + 1
-	go func() {
+	version += int64(tTable) + 1
+	go func(version int64) {
 		for ddl := range cInsert {
 			if scope.IncludeData {
-				g.writeInsert(folder, ddl, versionInsert)
+				g.writeInsert(folder, ddl, version)
 
-				versionInsert++
+				version++
 			}
 		}
-	}()
+	}(version)
 
 	wg.Wait()
 
-	return version + int64(tTable*2) + 1
+	return version + int64(tTable*8) + 1
 }
 
 func (g *generate) writeForeignKey(folder string, ddl *db.Ddl, version int64) {
@@ -318,16 +318,16 @@ func do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
 			)
 
 			if script.Reference.UpScript != "" {
-				nextVersion := m.version + 1
+				m.version = m.version + 1
 
 				os.WriteFile(
-					filepath.Join(migrationFolder, fmt.Sprintf("%d_primary_key_%s.up.sql", nextVersion, m.table)),
+					filepath.Join(migrationFolder, fmt.Sprintf("%d_primary_key_%s.up.sql", m.version, m.table)),
 					[]byte(script.Reference.UpScript),
 					0777,
 				)
 
 				os.WriteFile(
-					filepath.Join(migrationFolder, fmt.Sprintf("%d_primary_key_%s.down.sql", nextVersion, m.table)),
+					filepath.Join(migrationFolder, fmt.Sprintf("%d_primary_key_%s.down.sql", m.version, m.table)),
 					[]byte(script.Reference.DownScript),
 					0777,
 				)
