@@ -74,8 +74,12 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 		version = g.generateEnums(schema, migrationFolder, version)
 	}
 
+	progress.Stop()
+	progress.Suffix = fmt.Sprintf(" Processing tables on schema %s...", config.SuccessColor.Sprint(schema))
+	progress.Start()
+
 	if scope.Tables {
-		version = g.generateTables(progress, connection, schema, schemaConfig, migrationFolder, version, scope)
+		version = g.generateTables(connection, schema, schemaConfig, migrationFolder, version, scope)
 	}
 
 	progress.Stop()
@@ -194,7 +198,6 @@ func (g *generate) generateMaterializedViews(schema, folder string, version int6
 }
 
 func (g *generate) generateTables(
-	progress *spinner.Spinner,
 	connection string,
 	schema string,
 	schemaConfig map[string][]string,
@@ -220,11 +223,6 @@ func (g *generate) generateTables(
 	count := 0
 	for tableName := range cTable {
 		count++
-
-		progress.Stop()
-		progress = spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-		progress.Suffix = fmt.Sprintf(" Processing table %s (%d/%d) on schema %s...", config.SuccessColor.Sprint(tableName), count, tTable, config.SuccessColor.Sprint(schema))
-		progress.Start()
 
 		wg.Add(1)
 
