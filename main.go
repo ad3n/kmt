@@ -20,7 +20,16 @@ import (
 )
 
 func main() {
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err.Error())
+
+		os.Exit(0)
+	}
+
 	cfg := config.Parse(config.CONFIG_FILE)
+
+	cfg.Migration.Folder = filepath.Join(wd, cfg.Migration.Folder)
 
 	app := &cli.Command{
 		Name:                   "kmt",
