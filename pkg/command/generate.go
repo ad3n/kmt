@@ -18,6 +18,7 @@ import (
 )
 
 type GenerateScope struct {
+	SelectedTable     string
 	Tables            bool
 	Functions         bool
 	Views             bool
@@ -204,6 +205,22 @@ func (g *generate) generateMaterializedViews(schema, folder string, version int6
 	return version
 }
 
+func (g *generate) getTables(worker int, schema string, table string, excludes ...string) (<-chan string, int) {
+	if table != "" {
+		cTable := make(chan string, 1)
+
+		cTable <- table
+
+		close(cTable)
+
+		return cTable, 1
+	}
+
+	schemaTool := db.NewSchema(g.connection)
+
+	return schemaTool.ListTable(worker, schema, excludes...), schemaTool.CountTable(schema, len(excludes))
+}
+
 func (g *generate) generateTables(
 	connection string,
 	schema string,
@@ -213,9 +230,7 @@ func (g *generate) generateTables(
 	scope *GenerateScope,
 ) int64 {
 	nWorker := runtime.NumCPU()
-	schemaTool := db.NewSchema(g.connection)
-	cTable := schemaTool.ListTable(nWorker, schema, schemaConfig["excludes"]...)
-	tTable := schemaTool.CountTable(schema, len(schemaConfig["excludes"]))
+	cTable, tTable := g.getTables(nWorker, schema, scope.SelectedTable, schemaConfig["excludes"]...)
 	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[connection], g.connection)
 	cDdl := make(chan *db.Ddl, nWorker)
 	cInsert := make(chan *db.Ddl, nWorker)
@@ -227,10 +242,7 @@ func (g *generate) generateTables(
 		go do(cMigration, cDdl)
 	}
 
-	count := 0
 	for tableName := range cTable {
-		count++
-
 		wg.Add(1)
 
 		schemaOnly := true

@@ -200,11 +200,11 @@ func main() {
 			{
 				Name:        "generate",
 				Aliases:     []string{"gn"},
-				Description: "generate <connection> [<schema> [<table>|<view>|<function>|<materialize_view>]",
-				Usage:       "Generate migrations from <connection> on <schema> with options [<table>|<view>|<function>|<materialize_view>]",
+				Description: "generate <connection> [<schema> [<table>|view|function|mview]",
+				Usage:       "Generate migrations from <connection> on <schema> with options [<table>|view|function|mview]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 1 {
-						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [<table>|<view>|<function>|<materialize_view>]")
+						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [<table>|view|function|mview]")
 					}
 
 					connection := cmd.Args().Get(0)
@@ -242,6 +242,32 @@ func main() {
 						Views:             true,
 						MaterializedViews: true,
 						Enums:             true,
+					}
+
+					if len(args) > 2 {
+						switch args[2] {
+						case "function":
+							scope.Tables = false
+							scope.Views = false
+							scope.MaterializedViews = false
+							scope.Enums = false
+						case "view":
+							scope.Tables = false
+							scope.Functions = false
+							scope.MaterializedViews = false
+							scope.Enums = false
+						case "mview":
+							scope.Tables = false
+							scope.Functions = false
+							scope.Views = false
+							scope.Enums = false
+						default:
+							scope.SelectedTable = args[2]
+							scope.Functions = false
+							scope.Views = false
+							scope.MaterializedViews = false
+							scope.Enums = false
+						}
 					}
 
 					return cmdGenerate.Call(connection, schema, scope)
