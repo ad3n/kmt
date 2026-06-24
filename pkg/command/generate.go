@@ -18,7 +18,7 @@ import (
 )
 
 type GenerateScope struct {
-	SelectedTable     string
+	SelectedTable     []string
 	Tables            bool
 	Functions         bool
 	Views             bool
@@ -205,13 +205,16 @@ func (g *generate) generateMaterializedViews(schema, folder string, version int6
 	return version
 }
 
-func (g *generate) getTables(worker int, schema string, table string, excludes ...string) (<-chan string, int) {
-	if table != "" {
-		cTable := make(chan string, 1)
+func (g *generate) getTables(worker int, schema string, table []string, excludes ...string) (<-chan string, int) {
+	if len(table) > 0 {
+		cTable := make(chan string)
+		go func() {
+			for _, t := range table {
+				cTable <- t
+			}
 
-		cTable <- table
-
-		close(cTable)
+			close(cTable)
+		}()
 
 		return cTable, 1
 	}

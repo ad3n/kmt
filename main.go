@@ -200,11 +200,11 @@ func main() {
 			{
 				Name:        "generate",
 				Aliases:     []string{"gn"},
-				Description: "generate <connection> [<schema> [<table>|view|function|mview]",
-				Usage:       "Generate migrations from <connection> on <schema> with options [<table>|view|function|mview]",
+				Description: "generate <connection> [<schema> [<tables>|view|function|mview]",
+				Usage:       "Generate migrations from <connection> on <schema> with options [<tables>|view|function|mview]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 1 {
-						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [<table>|view|function|mview]")
+						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [<tables>|view|function|mview]")
 					}
 
 					connection := cmd.Args().Get(0)
@@ -262,7 +262,7 @@ func main() {
 							scope.Views = false
 							scope.Enums = false
 						default:
-							scope.SelectedTable = args[2]
+							scope.SelectedTable = strings.Split(args[2], ",")
 							scope.Functions = false
 							scope.Views = false
 							scope.MaterializedViews = false
