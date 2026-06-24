@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -48,6 +49,12 @@ func NewGenerate(config *config.Migration, connection *sql.DB) *generate {
 }
 
 func (g *generate) Call(connection string, schema string, scope *GenerateScope) error {
+	cli := exec.Command(g.config.PgDump, "--version")
+	err := cli.Run()
+	if err != nil {
+		return err
+	}
+
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 
 	source, ok := g.config.Connections[connection]
