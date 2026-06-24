@@ -56,12 +56,16 @@ func (u *up) Call(source string, schema string) error {
 	progress.Start()
 
 	err = migrator.Up()
-	if err != nil && err == gomigrate.ErrNoChange {
-		progress.Stop()
+	if err != nil {
+		if err == gomigrate.ErrNoChange {
+			progress.Stop()
 
-		config.SuccessColor.Printf("Database %s schema %s is up to date\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
+			config.SuccessColor.Printf("Database %s schema %s is up to date\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
 
-		return nil
+			return nil
+		}
+
+		return err
 	}
 
 	version, dirty, err := migrator.Version()

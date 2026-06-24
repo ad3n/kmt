@@ -65,22 +65,38 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 	migrationFolder := filepath.Join(g.config.Folder, schema)
 	os.MkdirAll(migrationFolder, 0777)
 
+	progress.Stop()
+	progress.Suffix = fmt.Sprintf(" Processing enums on schema %s...", config.SuccessColor.Sprint(schema))
+	progress.Start()
+
 	version := time.Now().Unix()
 	if scope.Enums {
 		version = g.generateEnums(schema, migrationFolder, version)
 	}
 
 	if scope.Tables {
-		version = g.generateTables(connection, schema, schemaConfig, migrationFolder, version, scope)
+		version = g.generateTables(progress, connection, schema, schemaConfig, migrationFolder, version, scope)
 	}
+
+	progress.Stop()
+	progress.Suffix = fmt.Sprintf(" Processing functions on schema %s...", config.SuccessColor.Sprint(schema))
+	progress.Start()
 
 	if scope.Functions {
 		version = g.generateFunctions(schema, migrationFolder, version)
 	}
 
+	progress.Stop()
+	progress.Suffix = fmt.Sprintf(" Processing views on schema %s...", config.SuccessColor.Sprint(schema))
+	progress.Start()
+
 	if scope.Views {
 		version = g.generateViews(schema, migrationFolder, version)
 	}
+
+	progress.Stop()
+	progress.Suffix = fmt.Sprintf(" Processing materialized views on schema %s...", config.SuccessColor.Sprint(schema))
+	progress.Start()
 
 	if scope.MaterializedViews {
 		g.generateMaterializedViews(schema, migrationFolder, version)
@@ -178,6 +194,7 @@ func (g *generate) generateMaterializedViews(schema, folder string, version int6
 }
 
 func (g *generate) generateTables(
+	progress *spinner.Spinner,
 	connection string,
 	schema string,
 	schemaConfig map[string][]string,
@@ -200,32 +217,38 @@ func (g *generate) generateTables(
 		go do(cMigration, cDdl)
 	}
 
-	go func(version int64) {
-		defer close(cMigration)
+	count := 0
+	for tableName := range cTable {
+		count++
 
-		for tableName := range cTable {
-			wg.Add(1)
+		progress.Stop()
+		progress = spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+		progress.Suffix = fmt.Sprintf(" Processing table %s (%d/%d) on schema %s...", config.SuccessColor.Sprint(tableName), count, tTable, config.SuccessColor.Sprint(schema))
+		progress.Start()
 
-			schemaOnly := true
-			if slices.Contains(schemaConfig["with_data"], tableName) {
-				schemaOnly = false
-			}
+		wg.Add(1)
 
-			scope.IncludeData = !schemaOnly
-
-			cMigration <- &migration{
-				wg:         &wg,
-				tableTool:  ddlTool,
-				folder:     folder,
-				version:    version,
-				schema:     schema,
-				table:      tableName,
-				schemaOnly: schemaOnly,
-			}
-
-			version += 2
+		schemaOnly := true
+		if slices.Contains(schemaConfig["with_data"], tableName) {
+			schemaOnly = false
 		}
-	}(version)
+
+		scope.IncludeData = !schemaOnly
+
+		cMigration <- &migration{
+			wg:         &wg,
+			tableTool:  ddlTool,
+			folder:     folder,
+			version:    version,
+			schema:     schema,
+			table:      tableName,
+			schemaOnly: schemaOnly,
+		}
+
+		version += 2
+	}
+
+	close(cMigration)
 
 	version += int64(tTable*2) + 1
 	go func(version int64) {
@@ -253,7 +276,7 @@ func (g *generate) generateTables(
 
 	wg.Wait()
 
-	return version + int64(tTable*8) + 1
+	return version + 1
 }
 
 func (g *generate) writeForeignKey(folder string, ddl *db.Ddl, version int64) {
@@ -297,22 +320,18 @@ func do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
 		func(m *migration) {
 			defer m.wg.Done()
 
-			migrationFolder := filepath.Join(m.folder, m.schema)
-			script := m.tableTool.Generate(
-				fmt.Sprintf("%s.%s", m.schema, m.table),
-				m.schemaOnly,
-			)
+			script := m.tableTool.Generate(fmt.Sprintf("%s.%s", m.schema, m.table), m.schemaOnly)
 
 			cDdl <- script
 
 			os.WriteFile(
-				filepath.Join(migrationFolder, fmt.Sprintf("%d_table_%s.up.sql", m.version, m.table)),
+				filepath.Join(m.folder, fmt.Sprintf("%d_table_%s.up.sql", m.version, m.table)),
 				[]byte(script.Definition.UpScript),
 				0777,
 			)
 
 			os.WriteFile(
-				filepath.Join(migrationFolder, fmt.Sprintf("%d_table_%s.down.sql", m.version, m.table)),
+				filepath.Join(m.folder, fmt.Sprintf("%d_table_%s.down.sql", m.version, m.table)),
 				[]byte(script.Definition.DownScript),
 				0777,
 			)
@@ -321,13 +340,13 @@ func do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
 				m.version = m.version + 1
 
 				os.WriteFile(
-					filepath.Join(migrationFolder, fmt.Sprintf("%d_primary_key_%s.up.sql", m.version, m.table)),
+					filepath.Join(m.folder, fmt.Sprintf("%d_primary_key_%s.up.sql", m.version, m.table)),
 					[]byte(script.Reference.UpScript),
 					0777,
 				)
 
 				os.WriteFile(
-					filepath.Join(migrationFolder, fmt.Sprintf("%d_primary_key_%s.down.sql", m.version, m.table)),
+					filepath.Join(m.folder, fmt.Sprintf("%d_primary_key_%s.down.sql", m.version, m.table)),
 					[]byte(script.Reference.DownScript),
 					0777,
 				)

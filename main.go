@@ -20,17 +20,7 @@ import (
 )
 
 func main() {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println(err.Error())
-
-		os.Exit(0)
-	}
-
 	cfg := config.Parse(config.CONFIG_FILE)
-
-	cfg.Migration.Folder = filepath.Join(wd, cfg.Migration.Folder)
-
 	app := &cli.Command{
 		Name:                   "kmt",
 		Usage:                  "Kejawen Migration Tool (KMT)",
@@ -252,31 +242,6 @@ func main() {
 						Views:             true,
 						MaterializedViews: true,
 						Enums:             true,
-					}
-
-					if len(args) > 2 {
-						switch args[2] {
-						case "table":
-							scope.Functions = false
-							scope.Views = false
-							scope.MaterializedViews = false
-							scope.Enums = false
-						case "function":
-							scope.Tables = false
-							scope.Views = false
-							scope.MaterializedViews = false
-							scope.Enums = false
-						case "view":
-							scope.Tables = false
-							scope.Functions = false
-							scope.MaterializedViews = false
-							scope.Enums = false
-						case "materialized_view":
-							scope.Tables = false
-							scope.Functions = false
-							scope.Views = false
-							scope.Enums = false
-						}
 					}
 
 					return cmdGenerate.Call(connection, schema, scope)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -57,7 +58,12 @@ func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migr
 		log.Fatalln(err.Error())
 	}
 
-	migrate, err := migrate.NewWithDatabaseInstance(fmt.Sprintf("file://%s", path), database, driver)
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	migrate, err := migrate.NewWithDatabaseInstance(fmt.Sprintf("file://%s", filepath.Join(wd, path)), database, driver)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}

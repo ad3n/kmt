@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -20,16 +19,8 @@ var (
 		CREATE_TABLE, SECURE_CREATE_TABLE,
 		CREATE_SEQUENCE, SECURE_CREATE_SEQUENCE,
 		CREATE_INDEX, SECURE_CREATE_INDEX,
+		CREATE_UNIQUE_INDEX, SECURE_CREATE_UNIQUE_INDEX,
 	)
-
-	upScript            strings.Builder
-	downScript          strings.Builder
-	upReferenceScript   strings.Builder
-	downReferenceScript strings.Builder
-	upForeignScript     strings.Builder
-	downForeignScript   strings.Builder
-	insertScript        strings.Builder
-	deleteScript        strings.Builder
 )
 
 type (
@@ -107,7 +98,7 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 
 	cli := exec.Command(t.command, options...)
 
-	cli.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
+	cli.Env = append(cli.Env, fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
 
 	var skip bool = false
 	var waitForSemicolon bool = false
@@ -116,6 +107,15 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	if primaryKey == name {
 		primaryKey = ""
 	}
+
+	var upScript strings.Builder
+	var downScript strings.Builder
+	var upReferenceScript strings.Builder
+	var downReferenceScript strings.Builder
+	var upForeignScript strings.Builder
+	var downForeignScript strings.Builder
+	var insertScript strings.Builder
+	var deleteScript strings.Builder
 
 	result, _ := cli.CombinedOutput()
 	lines := strings.Split(string(result), "\n")
