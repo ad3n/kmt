@@ -495,14 +495,14 @@ func main() {
 			{
 				Name:        "inspect",
 				Aliases:     []string{"d"},
-				Description: "inspect <table> <schema> <connection1> [<connection2> ...]",
-				Usage:       "Inspect <table> on <schema> on <connection1> [<connection2> ...]",
+				Description: "inspect <table> <schema> <connection1> [<connection2> ... --dump]",
+				Usage:       "Inspect <table> on <schema> on <connection1> [<connection2> ... --dump]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "dump", Aliases: []string{"d"}},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 3 {
-						return errors.New("not enough arguments. Usage: kmt inspect <table> <schema> <connection1> [<connection>]")
+						return errors.New("not enough arguments. Usage: kmt inspect <table> <schema> <connection1> [<connection2> ... --dump]")
 					}
 
 					cmdInspect := command.NewInspect(cfg.Migration)
