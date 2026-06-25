@@ -2,7 +2,9 @@ package command
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -19,6 +21,17 @@ func NewTest(config *config.Migration) *test {
 
 func (t *test) Call() error {
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+
+	progress.Suffix = " Test migration folder..."
+	progress.Start()
+	if err := t.testFolder(); err != nil {
+		progress.Stop()
+
+		config.ErrorColor.Printf("Migration folder '%s' is not writable: %s\n", config.BoldColor.Sprint(t.config.Folder), err.Error())
+
+		return nil
+	}
+
 	progress.Suffix = " Test connections config..."
 	progress.Start()
 
@@ -57,7 +70,7 @@ func (t *test) Call() error {
 	if err != nil {
 		progress.Stop()
 
-		config.ErrorColor.Printf("'pg_dump' command not found on %s\n", config.BoldColor.Sprint(t.config.PgDump))
+		config.ErrorColor.Printf("PG Dump not found on %s\n", config.BoldColor.Sprint(t.config.PgDump))
 
 		return nil
 	}
@@ -67,4 +80,18 @@ func (t *test) Call() error {
 	config.SuccessColor.Println("Config test passed")
 
 	return nil
+}
+
+func (t *test) testFolder() error {
+	if err := os.MkdirAll(t.config.Folder, 0777); err != nil {
+		return err
+	}
+
+	testFile := filepath.Join(t.config.Folder, ".kmt")
+
+	if err := os.WriteFile(testFile, []byte("ok"), 0644); err != nil {
+		return err
+	}
+
+	return os.Remove(testFile)
 }

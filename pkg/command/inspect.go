@@ -43,10 +43,7 @@ func (i *inspect) Compare(table string, schema string, dbs ...string) map[string
 	for _, dbName := range dbs {
 		cfg, ok := i.config.Connections[dbName]
 		if !ok {
-			config.ErrorColor.Printf(
-				"Database connection '%s' not found\n",
-				config.BoldColor.Sprint(dbName),
-			)
+			config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(dbName))
 
 			continue
 		}

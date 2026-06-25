@@ -52,20 +52,24 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 	cli := exec.Command(g.config.PgDump, "--version")
 	err := cli.Run()
 	if err != nil {
-		return err
+		config.ErrorColor.Printf("PG Dump not found in %s\n", config.BoldColor.Sprint(g.config.PgDump))
+
+		return nil
 	}
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 
 	source, ok := g.config.Connections[connection]
 	if !ok {
-		config.ErrorColor.Printf("Config for '%s' not found", connection)
+		config.ErrorColor.Printf("Config for '%s' not found\n", connection)
+
 		return nil
 	}
 
 	schemaConfig, ok := source.Schemas[schema]
 	if !ok {
 		config.ErrorColor.Printf("Schema '%s' not found\n", schema)
+
 		return nil
 	}
 
