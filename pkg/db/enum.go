@@ -14,6 +14,30 @@ func NewEnum(db *sql.DB) *enum {
 	return &enum{db: db}
 }
 
+func (s *enum) GenerateDdlSingle(schema string, enum string) <-chan *Migration {
+	return streamMigration(s.db, fmt.Sprintf(QUERY_ENUM, schema, enum), func(rows *sql.Rows) (*Migration, error) {
+		definition := Definition{}
+		err := rows.Scan(&definition.Name, &definition.Value)
+		if err != nil {
+			fmt.Println(err.Error())
+
+			return nil, err
+		}
+
+		shortName := definition.Name
+		sName := strings.Split(definition.Name, ".")
+		if len(sName) == 2 {
+			shortName = sName[1]
+		}
+
+		return &Migration{
+			Name:       shortName,
+			UpScript:   s.createDdl(definition.Name, definition.Value),
+			DownScript: fmt.Sprintf(SECURE_DROP_TYPE, definition.Name),
+		}, nil
+	})
+}
+
 func (s *enum) GenerateDdl(schema string) <-chan *Migration {
 	return streamMigration(s.db, fmt.Sprintf(QUERY_LIST_ENUM, schema), func(rows *sql.Rows) (*Migration, error) {
 		definition := Definition{}

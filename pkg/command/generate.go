@@ -18,12 +18,11 @@ import (
 )
 
 type GenerateScope struct {
-	SelectedTable     []string
-	Tables            bool
-	Functions         bool
-	Views             bool
-	MaterializedViews bool
-	Enums             bool
+	Tables            []string
+	Functions         []string
+	Views             []string
+	MaterializedViews []string
+	Enums             []string
 	IncludeData       bool
 }
 
@@ -78,41 +77,32 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 	progress.Start()
 
 	version := time.Now().Unix()
-	if scope.Enums {
-		version = g.generateEnums(schema, migrationFolder, version)
-	}
+
+	version = g.generateEnums(schema, migrationFolder, version, scope.Enums...)
 
 	progress.Stop()
 	progress.Suffix = fmt.Sprintf(" Processing tables on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
-	if scope.Tables {
-		version = g.generateTables(connection, schema, schemaConfig, migrationFolder, version, scope)
-	}
+	version = g.generateTables(connection, schema, schemaConfig, migrationFolder, version, scope)
 
 	progress.Stop()
 	progress.Suffix = fmt.Sprintf(" Processing functions on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
-	if scope.Functions {
-		version = g.generateFunctions(schema, migrationFolder, version)
-	}
+	version = g.generateFunctions(schema, migrationFolder, version, scope.Functions...)
 
 	progress.Stop()
 	progress.Suffix = fmt.Sprintf(" Processing views on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
-	if scope.Views {
-		version = g.generateViews(schema, migrationFolder, version)
-	}
+	version = g.generateViews(schema, migrationFolder, version, scope.Views...)
 
 	progress.Stop()
 	progress.Suffix = fmt.Sprintf(" Processing materialized views on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
-	if scope.MaterializedViews {
-		g.generateMaterializedViews(schema, migrationFolder, version)
-	}
+	g.generateMaterializedViews(schema, migrationFolder, version, scope.MaterializedViews...)
 
 	progress.Stop()
 
@@ -121,20 +111,23 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 	return nil
 }
 
-func (g *generate) generateEnums(schema, folder string, version int64) int64 {
+func (g *generate) generateEnums(schema string, folder string, version int64, enums ...string) int64 {
+	if len(enums) > 0 {
+		for _, enum := range enums {
+			udts := db.NewEnum(g.connection).GenerateDdlSingle(schema, enum)
+			for ddl := range udts {
+				g.write(folder, version, "enum", ddl.Name, ddl.UpScript, ddl.DownScript)
+
+				version++
+			}
+		}
+
+		return version
+	}
+
 	udts := db.NewEnum(g.connection).GenerateDdl(schema)
 	for ddl := range udts {
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_enum_%s.up.sql", version, ddl.Name)),
-			[]byte(ddl.UpScript),
-			0777,
-		)
-
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_enum_%s.down.sql", version, ddl.Name)),
-			[]byte(ddl.DownScript),
-			0777,
-		)
+		g.write(folder, version, "enum", ddl.Name, ddl.UpScript, ddl.DownScript)
 
 		version++
 	}
@@ -142,20 +135,23 @@ func (g *generate) generateEnums(schema, folder string, version int64) int64 {
 	return version
 }
 
-func (g *generate) generateFunctions(schema, folder string, version int64) int64 {
-	functions := db.NewFunction(g.connection).GenerateDdl(schema)
-	for ddl := range functions {
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_function_%s.up.sql", version, ddl.Name)),
-			[]byte(ddl.UpScript),
-			0777,
-		)
+func (g *generate) generateFunctions(schema, folder string, version int64, functions ...string) int64 {
+	if len(functions) > 0 {
+		for _, function := range functions {
+			funcs := db.NewFunction(g.connection).GenerateDdlSingle(schema, function)
+			for ddl := range funcs {
+				g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_function_%s.down.sql", version, ddl.Name)),
-			[]byte(ddl.DownScript),
-			0777,
-		)
+				version++
+			}
+		}
+
+		return version
+	}
+
+	funcs := db.NewFunction(g.connection).GenerateDdl(schema)
+	for ddl := range funcs {
+		g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript)
 
 		version++
 	}
@@ -163,20 +159,23 @@ func (g *generate) generateFunctions(schema, folder string, version int64) int64
 	return version
 }
 
-func (g *generate) generateViews(schema, folder string, version int64) int64 {
-	views := db.NewView(g.connection).GenerateDdl(schema)
-	for ddl := range views {
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_view_%s.up.sql", version, ddl.Name)),
-			[]byte(ddl.UpScript),
-			0777,
-		)
+func (g *generate) generateViews(schema, folder string, version int64, views ...string) int64 {
+	if len(views) > 0 {
+		for _, view := range views {
+			lViews := db.NewView(g.connection).GenerateDdlSingle(schema, view)
+			for ddl := range lViews {
+				g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_view_%s.down.sql", version, ddl.Name)),
-			[]byte(ddl.DownScript),
-			0777,
-		)
+				version++
+			}
+		}
+
+		return version
+	}
+
+	lViews := db.NewView(g.connection).GenerateDdl(schema)
+	for ddl := range lViews {
+		g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
 		version++
 	}
@@ -184,20 +183,23 @@ func (g *generate) generateViews(schema, folder string, version int64) int64 {
 	return version
 }
 
-func (g *generate) generateMaterializedViews(schema, folder string, version int64) int64 {
-	mViews := db.NewMaterializedView(g.connection).GenerateDdl(schema)
-	for ddl := range mViews {
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_materialized_view_%s.up.sql", version, ddl.Name)),
-			[]byte(ddl.UpScript),
-			0777,
-		)
+func (g *generate) generateMaterializedViews(schema, folder string, version int64, mViews ...string) int64 {
+	if len(mViews) > 0 {
+		for _, view := range mViews {
+			funcs := db.NewMaterializedView(g.connection).GenerateDdlSingle(schema, view)
+			for ddl := range funcs {
+				g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-		os.WriteFile(
-			filepath.Join(folder, fmt.Sprintf("%d_materialized_view_%s.down.sql", version, ddl.Name)),
-			[]byte(ddl.DownScript),
-			0777,
-		)
+				version++
+			}
+		}
+
+		return version
+	}
+
+	materializedViews := db.NewMaterializedView(g.connection).GenerateDdl(schema)
+	for ddl := range materializedViews {
+		g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
 		version++
 	}
@@ -216,7 +218,7 @@ func (g *generate) getTables(worker int, schema string, table []string, excludes
 			close(cTable)
 		}()
 
-		return cTable, 1
+		return cTable, len(table)
 	}
 
 	schemaTool := db.NewSchema(g.connection)
@@ -233,7 +235,7 @@ func (g *generate) generateTables(
 	scope *GenerateScope,
 ) int64 {
 	nWorker := runtime.NumCPU()
-	cTable, tTable := g.getTables(nWorker, schema, scope.SelectedTable, schemaConfig["excludes"]...)
+	cTable, tTable := g.getTables(nWorker, schema, scope.Tables, schemaConfig["excludes"]...)
 	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[connection], g.connection)
 	cDdl := make(chan *db.Ddl, nWorker)
 	cInsert := make(chan *db.Ddl, nWorker)
@@ -242,7 +244,7 @@ func (g *generate) generateTables(
 	var wg _sync.WaitGroup
 
 	for range nWorker {
-		go do(cMigration, cDdl)
+		go g.do(cMigration, cDdl)
 	}
 
 	for tableName := range cTable {
@@ -304,17 +306,7 @@ func (g *generate) writeForeignKey(folder string, ddl *db.Ddl, version int64) {
 		return
 	}
 
-	os.WriteFile(
-		filepath.Join(folder, fmt.Sprintf("%d_foreign_key_%s.up.sql", version, ddl.Name)),
-		[]byte(ddl.ForeignKey.UpScript),
-		0777,
-	)
-
-	os.WriteFile(
-		filepath.Join(folder, fmt.Sprintf("%d_foreign_key_%s.down.sql", version, ddl.Name)),
-		[]byte(ddl.ForeignKey.DownScript),
-		0777,
-	)
+	g.write(folder, version, "foreign_key", ddl.Name, ddl.ForeignKey.UpScript, ddl.ForeignKey.DownScript)
 }
 
 func (g *generate) writeInsert(folder string, ddl *db.Ddl, version int64) {
@@ -322,20 +314,10 @@ func (g *generate) writeInsert(folder string, ddl *db.Ddl, version int64) {
 		return
 	}
 
-	os.WriteFile(
-		filepath.Join(folder, fmt.Sprintf("%d_insert_%s.up.sql", version, ddl.Name)),
-		[]byte(ddl.Insert.UpScript),
-		0777,
-	)
-
-	os.WriteFile(
-		filepath.Join(folder, fmt.Sprintf("%d_insert_%s.down.sql", version, ddl.Name)),
-		[]byte(ddl.Insert.DownScript),
-		0777,
-	)
+	g.write(folder, version, "insert", ddl.Name, ddl.Insert.UpScript, ddl.Insert.DownScript)
 }
 
-func do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
+func (g *generate) do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
 	for m := range cMigration {
 		func(m *migration) {
 			defer m.wg.Done()
@@ -344,33 +326,39 @@ func do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
 
 			cDdl <- script
 
-			os.WriteFile(
-				filepath.Join(m.folder, fmt.Sprintf("%d_table_%s.up.sql", m.version, m.table)),
-				[]byte(script.Definition.UpScript),
-				0777,
-			)
-
-			os.WriteFile(
-				filepath.Join(m.folder, fmt.Sprintf("%d_table_%s.down.sql", m.version, m.table)),
-				[]byte(script.Definition.DownScript),
-				0777,
-			)
-
+			g.write(m.folder, m.version, "table", m.table, script.Definition.UpScript, script.Definition.DownScript)
 			if script.Reference.UpScript != "" {
 				m.version = m.version + 1
 
-				os.WriteFile(
-					filepath.Join(m.folder, fmt.Sprintf("%d_primary_key_%s.up.sql", m.version, m.table)),
-					[]byte(script.Reference.UpScript),
-					0777,
-				)
-
-				os.WriteFile(
-					filepath.Join(m.folder, fmt.Sprintf("%d_primary_key_%s.down.sql", m.version, m.table)),
-					[]byte(script.Reference.DownScript),
-					0777,
-				)
+				g.write(m.folder, m.version, "primary_key", m.table, script.Reference.UpScript, script.Reference.DownScript)
 			}
 		}(m)
 	}
+}
+
+func (g *generate) write(
+	folder string,
+	version int64,
+	objectType string,
+	name string,
+	upScript string,
+	downScript string,
+) {
+	os.WriteFile(
+		filepath.Join(
+			folder,
+			fmt.Sprintf("%d_%s_%s.up.sql", version, objectType, name),
+		),
+		[]byte(upScript),
+		0777,
+	)
+
+	os.WriteFile(
+		filepath.Join(
+			folder,
+			fmt.Sprintf("%d_%s_%s.down.sql", version, objectType, name),
+		),
+		[]byte(downScript),
+		0777,
+	)
 }

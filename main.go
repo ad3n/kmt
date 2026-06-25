@@ -198,8 +198,34 @@ func main() {
 				},
 			},
 			{
-				Name:        "generate",
-				Aliases:     []string{"gn"},
+				Name:    "generate",
+				Aliases: []string{"gn"},
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "table",
+						Usage: "tables to generate migration file(s)",
+					},
+					&cli.StringFlag{
+						Name:  "view",
+						Usage: "views to generate migration file(s)",
+					},
+					&cli.StringFlag{
+						Name:  "function",
+						Usage: "functions to generate migration file(s)",
+					},
+					&cli.StringFlag{
+						Name:  "mview",
+						Usage: "materialized views to generate migration file(s)",
+					},
+					&cli.StringFlag{
+						Name:  "enum",
+						Usage: "enums to generate migration file(s)",
+					},
+					&cli.BoolFlag{
+						Name:  "include-data",
+						Usage: "include data option when table option active",
+					},
+				},
 				Description: "generate <connection> [<schema> [<tables>|view|function|mview]",
 				Usage:       "Generate migrations from <connection> on <schema> with options [<tables>|view|function|mview]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -223,51 +249,33 @@ func main() {
 					args := cmd.Args().Slice()
 					if len(args) == 0 {
 						for schema := range source.Schemas {
-							cmdGenerate.Call(connection, schema, &command.GenerateScope{
-								Tables:            true,
-								Functions:         true,
-								Views:             true,
-								MaterializedViews: true,
-								Enums:             true,
-							})
+							cmdGenerate.Call(connection, schema, &command.GenerateScope{})
 						}
 
 						return nil
 					}
 
 					schema := args[1]
-					scope := &command.GenerateScope{
-						Tables:            true,
-						Functions:         true,
-						Views:             true,
-						MaterializedViews: true,
-						Enums:             true,
+					scope := &command.GenerateScope{}
+					if table := cmd.String("table"); table != "" {
+						scope.Tables = strings.Split(table, ",")
+						scope.IncludeData = cmd.Bool("include-data")
 					}
 
-					if len(args) > 2 {
-						switch args[2] {
-						case "function":
-							scope.Tables = false
-							scope.Views = false
-							scope.MaterializedViews = false
-							scope.Enums = false
-						case "view":
-							scope.Tables = false
-							scope.Functions = false
-							scope.MaterializedViews = false
-							scope.Enums = false
-						case "mview":
-							scope.Tables = false
-							scope.Functions = false
-							scope.Views = false
-							scope.Enums = false
-						default:
-							scope.SelectedTable = strings.Split(args[2], ",")
-							scope.Functions = false
-							scope.Views = false
-							scope.MaterializedViews = false
-							scope.Enums = false
-						}
+					if enum := cmd.String("enum"); enum != "" {
+						scope.Enums = strings.Split(enum, ",")
+					}
+
+					if view := cmd.String("view"); view != "" {
+						scope.Views = strings.Split(view, ",")
+					}
+
+					if mview := cmd.String("mview"); mview != "" {
+						scope.MaterializedViews = strings.Split(mview, ",")
+					}
+
+					if function := cmd.String("function"); function != "" {
+						scope.Functions = strings.Split(function, ",")
 					}
 
 					return cmdGenerate.Call(connection, schema, scope)
