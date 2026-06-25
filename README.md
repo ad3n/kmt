@@ -50,7 +50,7 @@ Manage postgresql cluster migration easly
 
 - `kmt drop <connection> <schema>` to drop migration(s) from database and schema
 
-- `kmt generate <connection> [<schema> [<tables>|view|function|mview]` to reverse migration from your `source` database and schema with options `<tables>` (seperate with comma), `view`, `function`, and `mview` (materialize view)
+- `kmt generate <connection> [<schema> [--table=<tables> --view=<views> --function=<functions> --mview=<mviews> --include-data]` to reverse migration from your `source` database and schema with options `table`, `view`, `function`, and `mview` (materialize view) seperate with comma
 
 - `kmt rollback <connection> <schema> <step>` to rollback migration version from database and schema
 

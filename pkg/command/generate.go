@@ -112,118 +112,107 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 }
 
 func (g *generate) generateEnums(schema string, folder string, version int64, enums ...string) int64 {
-	if len(enums) > 0 {
-		for _, enum := range enums {
-			udts := db.NewEnum(g.connection).GenerateDdlSingle(schema, enum)
-			for ddl := range udts {
-				g.write(folder, version, "enum", ddl.Name, ddl.UpScript, ddl.DownScript)
+	for _, enum := range enums {
+		udts := db.NewEnum(g.connection).GenerateDdlSingle(schema, enum)
+		for ddl := range udts {
+			g.write(folder, version, "enum", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-				version++
-			}
+			version++
 		}
-
-		return version
-	}
-
-	udts := db.NewEnum(g.connection).GenerateDdl(schema)
-	for ddl := range udts {
-		g.write(folder, version, "enum", ddl.Name, ddl.UpScript, ddl.DownScript)
-
-		version++
 	}
 
 	return version
 }
 
 func (g *generate) generateFunctions(schema, folder string, version int64, functions ...string) int64 {
-	if len(functions) > 0 {
-		for _, function := range functions {
-			funcs := db.NewFunction(g.connection).GenerateDdlSingle(schema, function)
-			for ddl := range funcs {
-				g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript)
+	if len(functions) > 0 && functions[0] == "all" {
+		funcs := db.NewFunction(g.connection).GenerateDdl(schema)
+		for ddl := range funcs {
+			g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-				version++
-			}
+			version++
 		}
 
 		return version
 	}
 
-	funcs := db.NewFunction(g.connection).GenerateDdl(schema)
-	for ddl := range funcs {
-		g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript)
+	for _, function := range functions {
+		funcs := db.NewFunction(g.connection).GenerateDdlSingle(schema, function)
+		for ddl := range funcs {
+			g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-		version++
+			version++
+		}
 	}
 
 	return version
 }
 
 func (g *generate) generateViews(schema, folder string, version int64, views ...string) int64 {
-	if len(views) > 0 {
-		for _, view := range views {
-			lViews := db.NewView(g.connection).GenerateDdlSingle(schema, view)
-			for ddl := range lViews {
-				g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript)
+	if len(views) > 0 && views[0] == "all" {
+		lViews := db.NewView(g.connection).GenerateDdl(schema)
+		for ddl := range lViews {
+			g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-				version++
-			}
+			version++
 		}
 
 		return version
 	}
 
-	lViews := db.NewView(g.connection).GenerateDdl(schema)
-	for ddl := range lViews {
-		g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript)
+	for _, view := range views {
+		lViews := db.NewView(g.connection).GenerateDdlSingle(schema, view)
+		for ddl := range lViews {
+			g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-		version++
+			version++
+		}
 	}
 
 	return version
 }
 
 func (g *generate) generateMaterializedViews(schema, folder string, version int64, mViews ...string) int64 {
-	if len(mViews) > 0 {
-		for _, view := range mViews {
-			funcs := db.NewMaterializedView(g.connection).GenerateDdlSingle(schema, view)
-			for ddl := range funcs {
-				g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript)
+	if len(mViews) > 0 && mViews[0] == "all" {
+		materializedViews := db.NewMaterializedView(g.connection).GenerateDdl(schema)
+		for ddl := range materializedViews {
+			g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-				version++
-			}
+			version++
 		}
 
 		return version
 	}
 
-	materializedViews := db.NewMaterializedView(g.connection).GenerateDdl(schema)
-	for ddl := range materializedViews {
-		g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript)
+	for _, view := range mViews {
+		funcs := db.NewMaterializedView(g.connection).GenerateDdlSingle(schema, view)
+		for ddl := range funcs {
+			g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript)
 
-		version++
+			version++
+		}
 	}
 
 	return version
 }
 
 func (g *generate) getTables(worker int, schema string, table []string, excludes ...string) (<-chan string, int) {
-	if len(table) > 0 {
-		cTable := make(chan string)
-		go func() {
-			for _, t := range table {
-				cTable <- t
-			}
+	if len(table) > 0 && table[0] == "all" {
+		schemaTool := db.NewSchema(g.connection)
 
-			close(cTable)
-		}()
-
-		return cTable, len(table)
+		return schemaTool.ListTable(worker, schema, excludes...), schemaTool.CountTable(schema, len(excludes))
 	}
 
-	schemaTool := db.NewSchema(g.connection)
+	cTable := make(chan string)
+	go func() {
+		for _, t := range table {
+			cTable <- t
+		}
 
-	return schemaTool.ListTable(worker, schema, excludes...), schemaTool.CountTable(schema, len(excludes))
+		close(cTable)
+	}()
+
+	return cTable, len(table)
 }
 
 func (g *generate) generateTables(

@@ -226,17 +226,17 @@ func main() {
 						Usage: "include data option when table option active",
 					},
 				},
-				Description: "generate <connection> [<schema> [<tables>|view|function|mview]",
-				Usage:       "Generate migrations from <connection> on <schema> with options [<tables>|view|function|mview]",
+				Description: "generate <connection> [<schema> [--table=<tables> --view=<views> --function=<functions> --mview=<mviews> --include-data]",
+				Usage:       "Generate migrations from <connection> on <schema> with options [--table=<tables> --view=<views> --function=<functions> --mview=<mviews> --include-data]",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 1 {
-						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [<tables>|view|function|mview]")
+						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [--table=<tables> --view=<views> --function=<functions> --mview=<mviews> --include-data]")
 					}
 
 					connection := cmd.Args().Get(0)
-					source, ok := cfg.Migration.Connections[cmd.Args().Get(0)]
+					source, ok := cfg.Migration.Connections[connection]
 					if !ok {
-						return fmt.Errorf("connection '%s' not found", cmd.Args().Get(0))
+						return fmt.Errorf("connection '%s' not found", connection)
 					}
 
 					db, err := config.NewConnection(source)
@@ -604,8 +604,7 @@ func main() {
 
 					t.Render()
 
-					dump := cmd.Bool("dump")
-					if dump {
+					if cmd.Bool("dump") {
 						reference := dbs[0]
 						for _, target := range dbs[1:] {
 							var sql string
