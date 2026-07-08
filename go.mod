@@ -15,7 +15,7 @@ require (
 require (
 	github.com/clipperhouse/stringish v0.1.1 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 )
 
 require (
@@ -48,5 +48,5 @@ require (
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 )
