@@ -10,7 +10,6 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            // "args": ["generate", "dev_162", "public"],
             "cwd": "${workspaceFolder}",
             "env": {},
         }
