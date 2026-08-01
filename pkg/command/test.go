@@ -51,10 +51,12 @@ func (t *test) Call() error {
 
 		err = func() error {
 			defer db.Close()
+
 			rows, err := db.Query("SELECT 1")
 			if err != nil {
 				return err
 			}
+
 			return rows.Close()
 		}()
 

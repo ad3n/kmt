@@ -34,6 +34,7 @@ func (s *set) Call(source string, schema string, version int) error {
 
 	valid := slices.ContainsFunc(files, func(file os.DirEntry) bool {
 		s, _ := parseMigrationVersion(file.Name())
+
 		return version == s
 	})
 
