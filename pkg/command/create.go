@@ -20,15 +20,9 @@ func NewCreate(config *config.Migration) *create {
 func (c *create) Call(schema string, name string) error {
 	valid := false
 	for _, c := range c.config.Connections {
-		for s := range c.Schemas {
-			if s == schema {
-				valid = true
+		if _, ok := c.Schemas[schema]; ok {
+			valid = true
 
-				break
-			}
-		}
-
-		if valid {
 			break
 		}
 	}

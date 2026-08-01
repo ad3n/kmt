@@ -6,7 +6,10 @@ import (
 )
 
 func parseMigrationVersion(filename string) (int, error) {
-	f := strings.Split(filename, "_")
+	idx := strings.IndexByte(filename, '_')
+	if idx == -1 {
+		return strconv.Atoi(filename)
+	}
 
-	return strconv.Atoi(f[0])
+	return strconv.Atoi(filename[:idx])
 }

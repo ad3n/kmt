@@ -30,6 +30,9 @@ func (s *sync) Run(source string, cluster string, schema string) error {
 	name := make(chan string)
 
 	go func(source string, conns []string, cConfigs map[string]*config.Connection, connection chan<- *config.Connection, name chan<- string) {
+		defer close(connection)
+		defer close(name)
+
 		for _, c := range conns {
 			if source == c {
 				continue
@@ -39,17 +42,12 @@ func (s *sync) Run(source string, cluster string, schema string) error {
 			if !ok {
 				config.ErrorColor.Printf("Connection '%s' isn't defined\n", config.BoldColor.Sprint(c))
 
-				close(connection)
-
-				break
+				return
 			}
 
 			connection <- x
 			name <- c
 		}
-
-		close(connection)
-		close(name)
 	}(source, lists, s.config.Connections, connection, name)
 
 	for source := range connection {

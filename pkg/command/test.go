@@ -48,9 +48,16 @@ func (t *test) Call() error {
 
 			return nil
 		}
-		defer db.Close()
 
-		_, err = db.Query("SELECT 1")
+		err = func() error {
+			defer db.Close()
+			rows, err := db.Query("SELECT 1")
+			if err != nil {
+				return err
+			}
+			return rows.Close()
+		}()
+
 		if err != nil {
 			progress.Stop()
 

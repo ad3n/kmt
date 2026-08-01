@@ -235,6 +235,7 @@ func (g *generate) generateTables(
 	cMigration := make(chan *migration, nWorker)
 
 	var wg _sync.WaitGroup
+	var writerWg _sync.WaitGroup
 
 	for range nWorker {
 		go g.do(cMigration, cDdl)
@@ -265,8 +266,16 @@ func (g *generate) generateTables(
 
 	close(cMigration)
 
+	go func() {
+		wg.Wait()
+		close(cDdl)
+	}()
+
+	writerWg.Add(2)
+
 	version += int64(tTable*2) + 1
 	go func(version int64) {
+		defer writerWg.Done()
 		defer close(cInsert)
 
 		for ddl := range cDdl {
@@ -280,6 +289,8 @@ func (g *generate) generateTables(
 
 	version += int64(tTable) + 1
 	go func(version int64) {
+		defer writerWg.Done()
+
 		for ddl := range cInsert {
 			if scope.IncludeData {
 				g.writeInsert(folder, ddl, version)
@@ -289,7 +300,7 @@ func (g *generate) generateTables(
 		}
 	}(version)
 
-	wg.Wait()
+	writerWg.Wait()
 
 	return version + 1
 }

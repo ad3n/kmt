@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"slices"
+
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
@@ -30,15 +32,10 @@ func (m *migrate) Call(source string, schema string, version int) error {
 		return nil
 	}
 
-	valid := false
-	for _, file := range files {
+	valid := slices.ContainsFunc(files, func(file os.DirEntry) bool {
 		s, _ := parseMigrationVersion(file.Name())
-		if version == s {
-			valid = true
-
-			break
-		}
-	}
+		return version == s
+	})
 
 	if !valid {
 		config.ErrorColor.Printf("Migration file for version %s not found\n", config.BoldColor.Sprint(version))

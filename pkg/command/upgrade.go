@@ -4,7 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -81,8 +81,8 @@ func (u *upgrade) Call() error {
 		return nil
 	})
 
-	sort.Slice(tagsList, func(i, j int) bool {
-		return tagsList[i].Timestamp.After(tagsList[j].Timestamp)
+	slices.SortFunc(tagsList, func(a, b *tagInfo) int {
+		return b.Timestamp.Compare(a.Timestamp)
 	})
 
 	if len(tagsList) == 0 {
