@@ -27,15 +27,15 @@ func (m *migrate) Call(source string, schema string, version int) error {
 	migrationFolder := filepath.Join(m.config.Folder, schema)
 	files, err := os.ReadDir(migrationFolder)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 
 	valid := slices.ContainsFunc(files, func(file os.DirEntry) bool {
-		s, _ := parseMigrationVersion(file.Name())
+		v, _ := parseMigrationVersion(file.Name())
 
-		return version == s
+		return version == v
 	})
 
 	if !valid {
@@ -51,8 +51,7 @@ func (m *migrate) Call(source string, schema string, version int) error {
 		return nil
 	}
 
-	_, ok = dbConfig.Schemas[schema]
-	if !ok {
+	if _, ok = dbConfig.Schemas[schema]; !ok {
 		config.ErrorColor.Printf("Schema '%s' not found\n", config.BoldColor.Sprint(schema))
 
 		return nil
@@ -60,7 +59,7 @@ func (m *migrate) Call(source string, schema string, version int) error {
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -69,14 +68,18 @@ func (m *migrate) Call(source string, schema string, version int) error {
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
 	defer migrator.Close()
 
-	err = migrator.Migrate(uint(version))
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
+	if err := migrator.Migrate(uint(version)); err != nil {
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 
-	config.SuccessColor.Printf("Migration on %s schema %s migrate to %s\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema), config.BoldColor.Sprint(version))
+	config.SuccessColor.Printf(
+		"Migration on %s schema %s migrate to %s\n",
+		config.BoldColor.Sprint(source),
+		config.BoldColor.Sprint(schema),
+		config.BoldColor.Sprint(version),
+	)
 
 	return nil
 }

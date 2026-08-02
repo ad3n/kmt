@@ -35,59 +35,61 @@ type (
 	}
 )
 
+// AddColumn and RemoveColumn are exported for use by callers formatting ALTER TABLE diff output.
 const (
-	ALTER_TABLE = "ALTER TABLE ONLY"
+	AddColumn    = "ADD %s %s%s%s;\n"
+	RemoveColumn = "DROP COLUMN %s;\n"
+)
 
-	ADD_COLUMN = "ADD %s %s%s%s;\n"
+const (
+	alterTable = "ALTER TABLE ONLY"
 
-	REMOVE_COLUMN = "DROP COLUMN %s;\n"
+	addConstraint = "ADD CONSTRAINT"
 
-	ADD_CONSTRAINT = "ADD CONSTRAINT"
+	insertInto = "INSERT INTO"
 
-	INSERT_INTO = "INSERT INTO"
+	foreignKey = "FOREIGN KEY"
 
-	FOREIGN_KEY = "FOREIGN KEY"
+	createTable = "CREATE TABLE"
 
-	CREATE_TABLE = "CREATE TABLE"
+	createSequence = "CREATE SEQUENCE"
 
-	CREATE_SEQUENCE = "CREATE SEQUENCE"
+	createIndex = "CREATE INDEX"
 
-	CREATE_INDEX = "CREATE INDEX"
+	createUniqueIndex = "CREATE UNIQUE INDEX"
 
-	CREATE_UNIQUE_INDEX = "CREATE UNIQUE INDEX"
+	secureCreateTable = "CREATE TABLE IF NOT EXISTS"
 
-	SECURE_CREATE_TABLE = "CREATE TABLE IF NOT EXISTS"
+	secureCreateSequence = "CREATE SEQUENCE IF NOT EXISTS"
 
-	SECURE_CREATE_SEQUENCE = "CREATE SEQUENCE IF NOT EXISTS"
+	secureCreateIndex = "CREATE INDEX IF NOT EXISTS"
 
-	SECURE_CREATE_INDEX = "CREATE INDEX IF NOT EXISTS"
+	secureCreateUniqueIndex = "CREATE UNIQUE INDEX IF NOT EXISTS"
 
-	SECURE_CREATE_UNIQUE_INDEX = "CREATE UNIQUE INDEX IF NOT EXISTS"
+	secureCreateView = "CREATE OR REPLACE VIEW %s AS %s"
 
-	SECURE_CREATE_VIEW = "CREATE OR REPLACE VIEW %s AS %s"
+	secureCreateMaterializedView = "CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS %s"
 
-	SECURE_CREATE_MATERIALIZED_VIEW = "CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS %s"
+	secureDropView = "DROP VIEW IF EXISTS %s;"
 
-	SECURE_DROP_VIEW = "DROP VIEW IF EXISTS %s;"
+	secureDropType = "DROP TYPE IF EXISTS %s;"
 
-	SECURE_DROP_TYPE = "DROP TYPE IF EXISTS %s;"
+	secureDropFunction = "DROP FUNCTION IF EXISTS %s(%s);"
 
-	SECURE_DROP_FUNCTION = "DROP FUNCTION IF EXISTS %s(%s);"
-
-	SQL_CREATE_ENUM_OPEN = `
+	sqlCreateEnumOpen = `
 DO $$ BEGIN
     CREATE TYPE %s AS ENUM (`
 
-	SQL_CREATE_ENUM_CLOSE = `%s);
+	sqlCreateEnumClose = `%s);
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
     `
 
-	SQL_INSERT_INTO_START = "INSERT INTO %s VALUES ("
-	SQL_INSERT_INTO_CLOSE = ");"
+	sqlInsertIntoStart = "INSERT INTO %s VALUES ("
+	sqlInsertIntoClose = ");"
 
-	QUERY_GET_PRIMARY_KEY = `
+	queryGetPrimaryKey = `
 SELECT
     kcu.column_name as key_column
 FROM information_schema.table_constraints tco
@@ -99,27 +101,27 @@ WHERE tco.constraint_type = 'PRIMARY KEY'
     AND kcu.table_schema = '%s'
     AND kcu.table_name = '%s';`
 
-	QUERY_LIST_FUNCTION = `
+	queryListFunction = `
 SELECT
     p.proname AS function_name,
     pg_get_functiondef(p.oid) AS function_definition,
-    pg_get_function_arguments(p.oid) AS function_paramters
+    pg_get_function_arguments(p.oid) AS function_parameters
 FROM pg_proc p
 JOIN pg_namespace n
     ON n.oid = p.pronamespace
 WHERE n.nspname = '%s';`
 
-	QUERY_FUNCTION = `
+	queryFunction = `
 SELECT
     p.proname AS function_name,
     pg_get_functiondef(p.oid) AS function_definition,
-    pg_get_function_arguments(p.oid) AS function_paramters
+    pg_get_function_arguments(p.oid) AS function_parameters
 FROM pg_proc p
 JOIN pg_namespace n
     ON n.oid = p.pronamespace
 WHERE n.nspname = '%s' AND function_name = '%s';`
 
-	QUERY_LIST_ENUM = `
+	queryListEnum = `
 SELECT
     pg_catalog.format_type ( t.oid, NULL ) AS name,
     pg_catalog.array_to_string (
@@ -148,7 +150,7 @@ WHERE ( t.typrelid = 0
     AND n.nspname = '%s'
 ORDER BY name;`
 
-	QUERY_ENUM = `
+	queryEnum = `
 SELECT
     pg_catalog.format_type ( t.oid, NULL ) AS name,
     pg_catalog.array_to_string (
@@ -177,7 +179,7 @@ WHERE ( t.typrelid = 0
     AND n.nspname = '%s'
     AND name = '%s';`
 
-	QUERY_LIST_TABLE = `
+	queryListTable = `
 SELECT
     LOWER(table_name) AS table_name
 FROM information_schema.tables
@@ -185,14 +187,14 @@ WHERE table_type='BASE TABLE'
     AND table_schema='%s'
 ORDER BY table_name;`
 
-	QUERY_COUNT_TABLE = `
+	queryCountTable = `
 SELECT
     COUNT(1) as total
 FROM information_schema.tables
 WHERE table_type='BASE TABLE'
     AND table_schema='%s';`
 
-	QUERY_LIST_VIEW = `
+	queryListView = `
 SELECT
     COALESCE(table_name, '') AS view_name,
     COALESCE(view_definition, '') AS definition
@@ -200,7 +202,7 @@ FROM information_schema.views
 WHERE table_schema = '%s'
 ORDER BY table_name;`
 
-	QUERY_VIEW = `
+	queryView = `
 SELECT
     COALESCE(table_name, '') AS view_name,
     COALESCE(view_definition, '') AS definition
@@ -208,7 +210,7 @@ FROM information_schema.views
 WHERE table_schema = '%s' AND view_name  = '%s'
 ORDER BY table_name;`
 
-	QUERY_LIST_MATERIALIZED_VIEW = `
+	queryListMaterializedView = `
 SELECT
     matviewname AS view_name,
     definition AS definition
@@ -216,14 +218,14 @@ FROM pg_matviews
 WHERE schemaname = '%s'
 ORDER BY schemaname, view_name;`
 
-	QUERY_MATERIALIZED_VIEW = `
+	queryMaterializedView = `
 SELECT
     matviewname AS view_name,
     definition AS definition
 FROM pg_matviews
 WHERE schemaname = '%s' AND view_name = '%s';`
 
-	QUERY_DESCRIBE_TABLE = `
+	queryDescribeTable = `
 SELECT
     column_name AS name,
     COALESCE(column_default, '') AS default_value,
@@ -250,12 +252,16 @@ func streamMigration(db *sql.DB, query string, builder func(*sql.Rows) (*Migrati
 		for rows.Next() {
 			item, err := builder(rows)
 			if err != nil {
-				fmt.Println(err.Error())
+				fmt.Println(err)
 
 				continue
 			}
 
 			ch <- item
+		}
+
+		if err := rows.Err(); err != nil {
+			fmt.Println(err)
 		}
 	}()
 

@@ -14,63 +14,60 @@ func NewEnum(db *sql.DB) *enum {
 	return &enum{db: db}
 }
 
-func (s *enum) GenerateDdlSingle(schema string, enum string) <-chan *Migration {
-	return streamMigration(s.db, fmt.Sprintf(QUERY_ENUM, schema, enum), func(rows *sql.Rows) (*Migration, error) {
-		definition := Definition{}
-		err := rows.Scan(&definition.Name, &definition.Value)
-		if err != nil {
-			fmt.Println(err.Error())
+func (e *enum) GenerateDdlSingle(schema string, name string) <-chan *Migration {
+	return streamMigration(e.db, fmt.Sprintf(queryEnum, schema, name), func(rows *sql.Rows) (*Migration, error) {
+		var def Definition
+		if err := rows.Scan(&def.Name, &def.Value); err != nil {
+			fmt.Println(err)
 
 			return nil, err
 		}
 
-		shortName := definition.Name
-		sName := strings.Split(definition.Name, ".")
-		if len(sName) == 2 {
-			shortName = sName[1]
+		shortName := def.Name
+		if parts := strings.SplitN(def.Name, ".", 2); len(parts) == 2 {
+			shortName = parts[1]
 		}
 
 		return &Migration{
 			Name:       shortName,
-			UpScript:   s.createDdl(definition.Name, definition.Value),
-			DownScript: fmt.Sprintf(SECURE_DROP_TYPE, definition.Name),
+			UpScript:   e.createDdl(def.Name, def.Value),
+			DownScript: fmt.Sprintf(secureDropType, def.Name),
 		}, nil
 	})
 }
 
-func (s *enum) GenerateDdl(schema string) <-chan *Migration {
-	return streamMigration(s.db, fmt.Sprintf(QUERY_LIST_ENUM, schema), func(rows *sql.Rows) (*Migration, error) {
-		definition := Definition{}
-		err := rows.Scan(&definition.Name, &definition.Value)
-		if err != nil {
-			fmt.Println(err.Error())
+func (e *enum) GenerateDdl(schema string) <-chan *Migration {
+	return streamMigration(e.db, fmt.Sprintf(queryListEnum, schema), func(rows *sql.Rows) (*Migration, error) {
+		var def Definition
+		if err := rows.Scan(&def.Name, &def.Value); err != nil {
+			fmt.Println(err)
 
 			return nil, err
 		}
 
-		shortName := definition.Name
-		sName := strings.Split(definition.Name, ".")
-		if len(sName) == 2 {
-			shortName = sName[1]
+		shortName := def.Name
+		if parts := strings.SplitN(def.Name, ".", 2); len(parts) == 2 {
+			shortName = parts[1]
 		}
 
 		return &Migration{
 			Name:       shortName,
-			UpScript:   s.createDdl(definition.Name, definition.Value),
-			DownScript: fmt.Sprintf(SECURE_DROP_TYPE, definition.Name),
+			UpScript:   e.createDdl(def.Name, def.Value),
+			DownScript: fmt.Sprintf(secureDropType, def.Name),
 		}, nil
 	})
 }
 
-func (s *enum) createDdl(name string, values string) string {
-	ddl := fmt.Sprintf(SQL_CREATE_ENUM_OPEN, name)
-	sV := strings.SplitSeq(values, "#")
-	for s := range sV {
-		ddl = fmt.Sprintf("%s'%s',", ddl, s)
+func (e *enum) createDdl(name, values string) string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, sqlCreateEnumOpen, name)
+
+	for v := range strings.SplitSeq(values, "#") {
+		fmt.Fprintf(&b, "'%s',", v)
 	}
 
-	ddl = strings.TrimRight(ddl, ",")
-	ddl = fmt.Sprintf(SQL_CREATE_ENUM_CLOSE, ddl)
+	ddl := strings.TrimRight(b.String(), ",")
 
-	return ddl
+	return fmt.Sprintf(sqlCreateEnumClose, ddl)
 }

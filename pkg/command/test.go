@@ -3,7 +3,6 @@ package command
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
@@ -20,31 +19,33 @@ func NewTest(config *config.Migration) *test {
 }
 
 func (t *test) Call() error {
-	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+	progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
 
 	progress.Suffix = " Test migration folder..."
 	progress.Start()
+
 	if err := t.testFolder(); err != nil {
 		progress.Stop()
 
-		config.ErrorColor.Printf("Migration folder '%s' is not writable: %s\n", config.BoldColor.Sprint(t.config.Folder), err.Error())
+		config.ErrorColor.Printf("Migration folder '%s' is not writable: %s\n", config.BoldColor.Sprint(t.config.Folder), err)
 
 		return nil
 	}
 
+	progress.Stop()
 	progress.Suffix = " Test connections config..."
 	progress.Start()
 
-	for i, c := range t.config.Connections {
+	for name, c := range t.config.Connections {
 		progress.Stop()
-		progress.Suffix = fmt.Sprintf(" Test connection to %s...", config.SuccessColor.Sprint(i))
+		progress.Suffix = fmt.Sprintf(" Test connection to %s...", config.SuccessColor.Sprint(name))
 		progress.Start()
 
 		db, err := config.NewConnection(c)
 		if err != nil {
 			progress.Stop()
 
-			config.ErrorColor.Println(err.Error())
+			config.ErrorColor.Println(err)
 
 			return nil
 		}
@@ -63,7 +64,7 @@ func (t *test) Call() error {
 		if err != nil {
 			progress.Stop()
 
-			config.ErrorColor.Printf("Connection '%s' error %s \n", config.BoldColor.Sprint(i), err.Error())
+			config.ErrorColor.Printf("Connection '%s' error %s \n", config.BoldColor.Sprint(name), err)
 
 			return nil
 		}
@@ -74,9 +75,7 @@ func (t *test) Call() error {
 	progress.Suffix = fmt.Sprintf(" Test '%s' command...", config.SuccessColor.Sprint("pg_dump"))
 	progress.Start()
 
-	cli := exec.Command(t.config.PgDump, "--version")
-	err := cli.Run()
-	if err != nil {
+	if err := checkPgDump(t.config.PgDump); err != nil {
 		progress.Stop()
 
 		config.ErrorColor.Printf("PG Dump not found on %s\n", config.BoldColor.Sprint(t.config.PgDump))

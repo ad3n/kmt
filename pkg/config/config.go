@@ -41,77 +41,84 @@ type (
 )
 
 func NewConnection(database *Connection) (*sql.DB, error) {
-	options := strings.Builder{}
+	var options strings.Builder
 	for k, v := range database.Options {
-		options.WriteString(k)
-		options.WriteString("=")
-		options.WriteString(v)
-		options.WriteString(" ")
+		fmt.Fprintf(&options, "%s=%s ", k, v)
 	}
 
-	return sql.Open("pgx", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, strings.TrimRight(options.String(), " ")))
+	dsn := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s %s",
+		database.Host,
+		database.Port,
+		database.User,
+		database.Password,
+		database.Name,
+		strings.TrimRight(options.String(), " "),
+	)
+
+	return sql.Open("pgx", dsn)
 }
 
-func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migrate {
+func NewMigrator(db *sql.DB, database, schema, path string) *migrate.Migrate {
 	driver, err := postgres.WithInstance(db, &postgres.Config{SchemaName: schema})
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatalln(err)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatalln(err)
 	}
 
-	migrate, err := migrate.NewWithDatabaseInstance(fmt.Sprintf("file://%s", filepath.Join(wd, path)), database, driver)
+	m, err := migrate.NewWithDatabaseInstance(
+		fmt.Sprintf("file://%s", filepath.Join(wd, path)),
+		database,
+		driver,
+	)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatalln(err)
 	}
 
-	return migrate
+	return m
 }
 
 func Parse(path string) *Config {
-	config := Config{}
-	c, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if err != nil {
-		log.Fatalf("Kmtfile.yml not found")
+		log.Fatal("Kmtfile.yml not found")
 	}
 
-	err = yaml.Unmarshal(c, &config)
-	if err != nil {
-		log.Fatalln(err.Error())
+	var cfg Config
+	if err = yaml.Unmarshal(raw, &cfg); err != nil {
+		log.Fatalln(err)
 	}
 
-	if config.Migration.PgDump == "" {
-		config.Migration.PgDump = "pg_dump"
+	if cfg.Migration.PgDump == "" {
+		cfg.Migration.PgDump = "pg_dump"
 	}
 
-	if config.Migration.Folder == "" {
-		config.Migration.Folder = "migrations"
+	if cfg.Migration.Folder == "" {
+		cfg.Migration.Folder = "migrations"
 	}
 
-	for k, cs := range config.Migration.Connections {
-		for x, v := range cs.Schemas {
+	for k, conn := range cfg.Migration.Connections {
+		for schemaName, v := range conn.Schemas {
 			if v == nil {
 				v = map[string][]string{}
 			}
 
-			_, ok := v["excludes"]
-			if !ok {
+			if _, ok := v["excludes"]; !ok {
 				v["excludes"] = []string{}
 			}
-
 			v["excludes"] = append(v["excludes"], "schema_migrations")
 
-			_, ok = v["with_data"]
-			if !ok {
+			if _, ok := v["with_data"]; !ok {
 				v["with_data"] = []string{}
 			}
 
-			config.Migration.Connections[k].Schemas[x] = v
+			cfg.Migration.Connections[k].Schemas[schemaName] = v
 		}
 	}
 
-	return &config
+	return &cfg
 }

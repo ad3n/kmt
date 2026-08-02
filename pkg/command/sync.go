@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -10,15 +11,15 @@ import (
 	gomigrate "github.com/golang-migrate/migrate/v4"
 )
 
-type sync struct {
+type migrationSync struct {
 	config *config.Migration
 }
 
-func NewSync(config *config.Migration) *sync {
-	return &sync{config: config}
+func NewSync(config *config.Migration) *migrationSync {
+	return &migrationSync{config: config}
 }
 
-func (s *sync) Run(source string, cluster string, schema string) error {
+func (s *migrationSync) Run(source string, cluster string, schema string) error {
 	lists, ok := s.config.Clusters[cluster]
 	if !ok {
 		config.ErrorColor.Printf("Cluster '%s' isn't defined\n", config.BoldColor.Sprint(cluster))
@@ -26,48 +27,48 @@ func (s *sync) Run(source string, cluster string, schema string) error {
 		return nil
 	}
 
-	connection := make(chan *config.Connection)
-	name := make(chan string)
+	connCh := make(chan *config.Connection)
+	nameCh := make(chan string)
 
-	go func(source string, conns []string, cConfigs map[string]*config.Connection, connection chan<- *config.Connection, name chan<- string) {
-		defer close(connection)
-		defer close(name)
+	go func() {
+		defer close(connCh)
+		defer close(nameCh)
 
-		for _, c := range conns {
+		for _, c := range lists {
 			if source == c {
 				continue
 			}
 
-			x, ok := cConfigs[c]
+			x, ok := s.config.Connections[c]
 			if !ok {
 				config.ErrorColor.Printf("Connection '%s' isn't defined\n", config.BoldColor.Sprint(c))
 
 				return
 			}
 
-			connection <- x
-			name <- c
+			connCh <- x
+			nameCh <- c
 		}
-	}(source, lists, s.config.Connections, connection, name)
+	}()
 
-	for source := range connection {
-		db, err := config.NewConnection(source)
+	for conn := range connCh {
+		db, err := config.NewConnection(conn)
 		if err != nil {
-			config.ErrorColor.Println(err.Error())
+			config.ErrorColor.Println(err)
 
 			return nil
 		}
 		defer db.Close()
 
-		migrator := config.NewMigrator(db, source.Name, schema, filepath.Join(s.config.Folder, schema))
+		migrator := config.NewMigrator(db, conn.Name, schema, filepath.Join(s.config.Folder, schema))
 		defer migrator.Close()
 
-		progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(<-name), config.BoldColor.Sprint(schema))
+		progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
+		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(<-nameCh), config.BoldColor.Sprint(schema))
 		progress.Start()
 
 		err = migrator.Up()
-		if err != nil && err == gomigrate.ErrNoChange {
+		if errors.Is(err, gomigrate.ErrNoChange) {
 			progress.Stop()
 
 			continue

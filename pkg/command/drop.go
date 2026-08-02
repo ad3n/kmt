@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -26,8 +27,7 @@ func (d *drop) Call(source string, schema string) error {
 		return nil
 	}
 
-	_, ok = dbConfig.Schemas[schema]
-	if !ok {
+	if _, ok = dbConfig.Schemas[schema]; !ok {
 		config.ErrorColor.Printf("Schema '%s' not found\n", schema)
 
 		return nil
@@ -35,7 +35,7 @@ func (d *drop) Call(source string, schema string) error {
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -44,12 +44,12 @@ func (d *drop) Call(source string, schema string) error {
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(d.config.Folder, schema))
 	defer migrator.Close()
 
-	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+	progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
 	progress.Suffix = fmt.Sprintf(" Dropping migrations for %s on %s schema", config.SuccessColor.Sprint(source), config.SuccessColor.Sprint(schema))
 	progress.Start()
 
 	err = migrator.Drop()
-	if err != nil && err == gomigrate.ErrNoChange {
+	if errors.Is(err, gomigrate.ErrNoChange) {
 		progress.Stop()
 
 		config.SuccessColor.Printf("Database %s schema %s is up to date\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))

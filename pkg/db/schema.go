@@ -5,11 +5,9 @@ import (
 	"fmt"
 )
 
-type (
-	schema struct {
-		db *sql.DB
-	}
-)
+type schema struct {
+	db *sql.DB
+}
 
 func NewSchema(db *sql.DB) *schema {
 	return &schema{db: db}
@@ -18,9 +16,8 @@ func NewSchema(db *sql.DB) *schema {
 func (s *schema) CountTable(name string, nExcludes int) int {
 	var total int
 
-	err := s.db.QueryRow(fmt.Sprintf(QUERY_COUNT_TABLE, name)).Scan(&total)
-	if err != nil {
-		fmt.Println(err.Error())
+	if err := s.db.QueryRow(fmt.Sprintf(queryCountTable, name)).Scan(&total); err != nil {
+		fmt.Println(err)
 
 		return 0
 	}
@@ -30,10 +27,10 @@ func (s *schema) CountTable(name string, nExcludes int) int {
 
 func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan string {
 	cTable := make(chan string, nWorker)
-	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_TABLE, name))
-	if err != nil {
-		fmt.Println(err.Error())
 
+	rows, err := s.db.Query(fmt.Sprintf(queryListTable, name))
+	if err != nil {
+		fmt.Println(err)
 		close(cTable)
 
 		return cTable
@@ -44,16 +41,15 @@ func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan 
 		excludeMap[e] = struct{}{}
 	}
 
-	go func(result *sql.Rows, channel chan<- string) {
+	go func() {
 		defer close(cTable)
 		defer rows.Close()
 
-		for result.Next() {
+		for rows.Next() {
 			var table string
 
-			err = result.Scan(&table)
-			if err != nil {
-				fmt.Println(err.Error())
+			if err := rows.Scan(&table); err != nil {
+				fmt.Println(err)
 
 				continue
 			}
@@ -66,9 +62,9 @@ func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan 
 		}
 
 		if err := rows.Err(); err != nil {
-			fmt.Println(err.Error())
+			fmt.Println(err)
 		}
-	}(rows, cTable)
+	}()
 
 	return cTable
 }

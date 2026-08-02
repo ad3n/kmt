@@ -24,8 +24,7 @@ func (c *copy) Call(schema string, source string, destination string) error {
 		return nil
 	}
 
-	_, ok = sourceConfig.Schemas[schema]
-	if !ok {
+	if _, ok = sourceConfig.Schemas[schema]; !ok {
 		config.ErrorColor.Printf("Schema '%s' not found on %s\n", config.BoldColor.Sprint(schema), config.BoldColor.Sprint(source))
 
 		return nil
@@ -38,8 +37,7 @@ func (c *copy) Call(schema string, source string, destination string) error {
 		return nil
 	}
 
-	_, ok = destinationConfig.Schemas[schema]
-	if !ok {
+	if _, ok = destinationConfig.Schemas[schema]; !ok {
 		config.ErrorColor.Printf("Schema '%s' not found on %s\n", config.BoldColor.Sprint(schema), config.BoldColor.Sprint(destination))
 
 		return nil
@@ -47,7 +45,7 @@ func (c *copy) Call(schema string, source string, destination string) error {
 
 	sourceDb, err := config.NewConnection(sourceConfig)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -55,13 +53,14 @@ func (c *copy) Call(schema string, source string, destination string) error {
 
 	destinationDb, err := config.NewConnection(destinationConfig)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 	defer destinationDb.Close()
 
 	migrationFolder := filepath.Join(c.config.Folder, schema)
+
 	sourceMigrator := config.NewMigrator(sourceDb, sourceConfig.Name, schema, migrationFolder)
 	defer sourceMigrator.Close()
 
@@ -70,26 +69,36 @@ func (c *copy) Call(schema string, source string, destination string) error {
 
 	sourceVersion, _, err := sourceMigrator.Version()
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 
 	destinationVersion, _, err := destinationMigrator.Version()
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 
 	if destinationVersion > sourceVersion {
-		config.SuccessColor.Printf("Your schema %s on %s has higher version than %s\n", config.BoldColor.Sprint(schema), config.BoldColor.Sprint(destination), config.BoldColor.Sprint(source))
+		config.SuccessColor.Printf(
+			"Your schema %s on %s has higher version than %s\n",
+			config.BoldColor.Sprint(schema),
+			config.BoldColor.Sprint(destination),
+			config.BoldColor.Sprint(source),
+		)
 
 		return nil
 	}
 
 	if sourceVersion == destinationVersion {
-		config.SuccessColor.Printf("Migration for schema %s on %s has same version with %s\n", config.BoldColor.Sprint(schema), config.BoldColor.Sprint(destination), config.BoldColor.Sprint(source))
+		config.SuccessColor.Printf(
+			"Migration for schema %s on %s has same version with %s\n",
+			config.BoldColor.Sprint(schema),
+			config.BoldColor.Sprint(destination),
+			config.BoldColor.Sprint(source),
+		)
 
 		return nil
 	}
@@ -101,7 +110,13 @@ func (c *copy) Call(schema string, source string, destination string) error {
 		return nil
 	}
 
-	config.SuccessColor.Printf("Migration for schema %s on %s set to %s (same as %s version)\n", config.BoldColor.Sprint(schema), config.BoldColor.Sprint(destination), config.BoldColor.Sprint(sourceVersion), config.BoldColor.Sprint(source))
+	config.SuccessColor.Printf(
+		"Migration for schema %s on %s set to %s (same as %s version)\n",
+		config.BoldColor.Sprint(schema),
+		config.BoldColor.Sprint(destination),
+		config.BoldColor.Sprint(sourceVersion),
+		config.BoldColor.Sprint(source),
+	)
 
 	return nil
 }

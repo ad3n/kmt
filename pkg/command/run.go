@@ -33,8 +33,7 @@ func (r *run) Call(source string, schema string, step int) error {
 		return nil
 	}
 
-	_, ok = dbConfig.Schemas[schema]
-	if !ok {
+	if _, ok = dbConfig.Schemas[schema]; !ok {
 		config.ErrorColor.Printf("Schema '%s' not found\n", config.BoldColor.Sprint(schema))
 
 		return nil
@@ -42,7 +41,7 @@ func (r *run) Call(source string, schema string, step int) error {
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -51,30 +50,32 @@ func (r *run) Call(source string, schema string, step int) error {
 	migrationFolder := filepath.Join(r.config.Folder, schema)
 	files, err := os.ReadDir(migrationFolder)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
-	version, _, _ := migrator.Version()
+	currentVersion, _, _ := migrator.Version()
+
 	valid := false
-	migrations := make([]string, 0, len(files)/2)
 	number := 0
+	migrations := make([]string, 0, len(files)/2)
+
 	for i, file := range files {
 		if i%2 == 0 {
 			continue
 		}
 
-		s, _ := parseMigrationVersion(file.Name())
-		if !valid && version == uint(s) {
+		v, _ := parseMigrationVersion(file.Name())
+		if !valid && currentVersion == uint(v) {
 			valid = true
 
 			continue
 		}
 
 		if valid && number < step {
-			migrations = append(migrations, strconv.Itoa(s))
+			migrations = append(migrations, strconv.Itoa(v))
 
 			number++
 		}
@@ -87,11 +88,11 @@ func (r *run) Call(source string, schema string, step int) error {
 	}
 
 	for _, v := range migrations {
-		progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+		progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
 		progress.Suffix = fmt.Sprintf(" Run migration file %s on schema %s", config.SuccessColor.Sprint(v), config.BoldColor.Sprint(schema))
+		progress.Start()
 
-		err = migrator.Steps(1)
-		if err != nil {
+		if err = migrator.Steps(1); err != nil {
 			progress.Stop()
 			config.ErrorColor.Printf("Error when running %s with message %s\n", config.SuccessColor.Sprint(v), config.BoldColor.Sprint(err.Error()))
 

@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	cfg := config.Parse(config.CONFIG_FILE)
+	cfg := config.Parse(config.ConfigFile)
 	app := &cli.Command{
 		Name:                   "kmt",
 		Usage:                  "Kejawen Migration Tool (KMT)",
@@ -626,7 +626,7 @@ func main() {
 										defaultValue = fmt.Sprintf(" DEFAULT %s", ref.DefaultValue)
 									}
 
-									sql += fmt.Sprintf(db.ADD_COLUMN, columnName, ref.DataType, nullable, defaultValue)
+									sql += fmt.Sprintf(db.AddColumn, columnName, ref.DataType, nullable, defaultValue)
 								}
 
 								if ref == nil && dst != nil {
@@ -634,7 +634,7 @@ func main() {
 										sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
 									}
 
-									sql += fmt.Sprintf(db.REMOVE_COLUMN, columnName)
+									sql += fmt.Sprintf(db.RemoveColumn, columnName)
 								}
 							}
 
@@ -680,7 +680,7 @@ func main() {
 					gColor := color.New(color.FgGreen)
 					bColor := color.New(color.Bold)
 
-					fmt.Printf("%s\n\n", gColor.Sprintf("Kejawen Migration Tool (KMT) - %s", bColor.Sprint(config.VERSION_STRING)))
+					fmt.Printf("%s\n\n", gColor.Sprintf("Kejawen Migration Tool (KMT) - %s", bColor.Sprint(config.VersionString)))
 					fmt.Printf("%s<surya.iksanudin@gmail.com>\n", gColor.Sprint("Muhamad Surya Iksanudin"))
 
 					return nil

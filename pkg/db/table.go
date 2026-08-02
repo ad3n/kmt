@@ -16,10 +16,10 @@ var (
 	reForeign   = regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk`)
 
 	ddlReplacer = strings.NewReplacer(
-		CREATE_TABLE, SECURE_CREATE_TABLE,
-		CREATE_SEQUENCE, SECURE_CREATE_SEQUENCE,
-		CREATE_INDEX, SECURE_CREATE_INDEX,
-		CREATE_UNIQUE_INDEX, SECURE_CREATE_UNIQUE_INDEX,
+		createTable, secureCreateTable,
+		createSequence, secureCreateSequence,
+		createIndex, secureCreateIndex,
+		createUniqueIndex, secureCreateUniqueIndex,
 	)
 )
 
@@ -44,7 +44,7 @@ func NewTable(command string, config *config.Connection, db *sql.DB) *Table {
 }
 
 func (t *Table) Detail(table string) (map[string]*Column, error) {
-	rows, err := t.db.Query(fmt.Sprintf(QUERY_DESCRIBE_TABLE, table))
+	rows, err := t.db.Query(fmt.Sprintf(queryDescribeTable, table))
 	if err != nil {
 		return nil, err
 	}
@@ -53,13 +53,12 @@ func (t *Table) Detail(table string) (map[string]*Column, error) {
 	result := make(map[string]*Column)
 
 	for rows.Next() {
-		column := Column{}
+		var column Column
 		if err := rows.Scan(&column.Name, &column.DefaultValue, &column.NullableText, &column.DataType); err != nil {
 			return nil, err
 		}
 
 		column.Nullable = column.NullableText != "no"
-
 		result[column.Name] = &column
 	}
 
@@ -97,38 +96,40 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	}
 
 	cli := exec.Command(t.command, options...)
-
 	cli.Env = append(cli.Env, fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
 
-	var skip bool = false
-	var waitForSemicolon bool = false
+	skip := false
+	waitForSemicolon := false
 
 	primaryKey := t.primaryKey(name)
 	if primaryKey == name {
 		primaryKey = ""
 	}
 
-	var upScript strings.Builder
-	var downScript strings.Builder
-	var upReferenceScript strings.Builder
-	var downReferenceScript strings.Builder
-	var upForeignScript strings.Builder
-	var downForeignScript strings.Builder
-	var insertScript strings.Builder
-	var deleteScript strings.Builder
+	var (
+		upScript           strings.Builder
+		downScript         strings.Builder
+		upReferenceScript  strings.Builder
+		downReferenceScript strings.Builder
+		upForeignScript    strings.Builder
+		downForeignScript  strings.Builder
+		insertScript       strings.Builder
+		deleteScript       strings.Builder
+	)
 
 	result, _ := cli.CombinedOutput()
 	lines := strings.Split(string(result), "\n")
+
 	for n, line := range lines {
-		if t.skip(line) || skip {
+		if t.skipLine(line) || skip {
 			skip = false
 
 			continue
 		}
 
-		if t.downScript(line) {
-			if t.downReferenceScript(line) {
-				if t.downForeignkey(line) {
+		if t.isDownScript(line) {
+			if t.isDownReferenceScript(line) {
+				if t.isDownForeignKey(line) {
 					downForeignScript.WriteString(line)
 					downForeignScript.WriteString("\n")
 
@@ -147,8 +148,8 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 			continue
 		}
 
-		if t.refereceScript(line, n, lines) {
-			if t.foreignScript(lines[n+1]) {
+		if t.isReferenceScript(line, n, lines) {
+			if t.isForeignScript(lines[n+1]) {
 				upForeignScript.WriteString(line)
 				upForeignScript.WriteString("\n")
 				upForeignScript.WriteString(lines[n+1])
@@ -173,7 +174,7 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 			insertScript.WriteString("\n")
 			insertScript.WriteString(line)
 
-			if !t.waitForSemicolon(line) {
+			if !t.needsMoreLines(line) {
 				waitForSemicolon = false
 			}
 
@@ -182,12 +183,13 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 			}
 		}
 
-		if t.insertScript(line) {
-			if t.waitForSemicolon(line) {
+		if t.isInsertScript(line) {
+			if t.needsMoreLines(line) {
 				waitForSemicolon = true
 			}
 
 			insertScript.WriteString(line)
+
 			if primaryKey != "" {
 				deleteScript.WriteString("DELETE FROM ")
 				deleteScript.WriteString(name)
@@ -207,7 +209,6 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 
 		upScript.WriteString(line)
 		upScript.WriteString("\n")
-
 	}
 
 	return &Ddl{
@@ -238,19 +239,17 @@ func (t *Table) primaryKey(name string) string {
 	}
 
 	var pk string
-
-	err := t.db.QueryRow(fmt.Sprintf(QUERY_GET_PRIMARY_KEY, tables[0], tables[1])).Scan(&pk)
-	if err != nil {
+	if err := t.db.QueryRow(fmt.Sprintf(queryGetPrimaryKey, tables[0], tables[1])).Scan(&pk); err != nil {
 		return ""
 	}
 
 	return pk
 }
 
-func (Table) keyValue(line string, name string, between bool) string {
-	line = strings.TrimPrefix(line, fmt.Sprintf(SQL_INSERT_INTO_START, name))
+func (Table) keyValue(line, name string, between bool) string {
+	line = strings.TrimPrefix(line, fmt.Sprintf(sqlInsertIntoStart, name))
 	if between {
-		line = strings.TrimSuffix(line, SQL_INSERT_INTO_CLOSE)
+		line = strings.TrimSuffix(line, sqlInsertIntoClose)
 	}
 
 	return firstValue(line)
@@ -272,46 +271,48 @@ func firstValue(values string) string {
 	return strings.TrimSpace(values)
 }
 
-func (Table) skip(line string) bool {
+func (Table) skipLine(line string) bool {
 	return line == "" ||
 		strings.HasPrefix(line, "--") ||
 		strings.HasPrefix(line, "SET ") ||
 		strings.HasPrefix(line, "SELECT ") ||
-		strings.HasPrefix(line, "\\connect ") ||
-		strings.HasPrefix(line, "\\copy ") ||
-		strings.HasPrefix(line, "\\restrict ") ||
-		strings.HasPrefix(line, "\\setrestrict ") ||
-		strings.HasPrefix(line, "\\unrestrict ")
+		strings.HasPrefix(line, `\connect `) ||
+		strings.HasPrefix(line, `\copy `) ||
+		strings.HasPrefix(line, `\restrict `) ||
+		strings.HasPrefix(line, `\setrestrict `) ||
+		strings.HasPrefix(line, `\unrestrict `)
 }
 
-func (Table) downScript(line string) bool {
+func (Table) isDownScript(line string) bool {
 	return strings.Contains(line, "DROP")
 }
 
-func (Table) downReferenceScript(line string) bool {
+func (Table) isDownReferenceScript(line string) bool {
 	return reReference.MatchString(line)
 }
 
-func (Table) downForeignkey(line string) bool {
+func (Table) isDownForeignKey(line string) bool {
 	return reForeign.MatchString(line)
 }
 
-func (Table) foreignScript(line string) bool {
-	return strings.Contains(line, FOREIGN_KEY)
+func (Table) isForeignScript(line string) bool {
+	return strings.Contains(line, foreignKey)
 }
 
-func (Table) refereceScript(line string, n int, lines []string) bool {
+func (Table) isReferenceScript(line string, n int, lines []string) bool {
 	if n+1 >= len(lines) {
 		return false
 	}
 
-	return strings.Contains(line, ALTER_TABLE) && strings.Contains(lines[n+1], ADD_CONSTRAINT)
+	return strings.Contains(line, alterTable) && strings.Contains(lines[n+1], addConstraint)
 }
 
-func (Table) insertScript(line string) bool {
-	return strings.Contains(line, INSERT_INTO)
+func (Table) isInsertScript(line string) bool {
+	return strings.Contains(line, insertInto)
 }
 
-func (Table) waitForSemicolon(line string) bool {
+// needsMoreLines reports whether the insert statement continues on the next line
+// (i.e. it does not end with ");").
+func (Table) needsMoreLines(line string) bool {
 	return !strings.HasSuffix(line, ");")
 }

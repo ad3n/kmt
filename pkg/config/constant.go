@@ -7,14 +7,14 @@ import (
 )
 
 const (
-	VERSION_STRING = "v2.6.21"
+	VersionString = "v2.6.21"
 
-	SPINER_INDEX    = 9
-	SPINER_DURATION = 77 * time.Millisecond
+	SpinnerIndex    = 9
+	SpinnerDuration = 77 * time.Millisecond
 
-	REPOSITORY = "https://github.com/ad3n/kmt.git"
+	Repository = "https://github.com/ad3n/kmt.git"
 
-	CONFIG_FILE = "Kmtfile.yml"
+	ConfigFile = "Kmtfile.yml"
 )
 
 var (

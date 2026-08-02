@@ -29,7 +29,7 @@ func (i *inspect) Describe(table string, schema string, connection string) map[s
 
 	result, err := db.NewTable("", cfg, conn).Detail(table)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -58,16 +58,15 @@ func (i *inspect) Compare(table string, schema string, dbs ...string) map[string
 
 			detail, err := db.NewTable("", cfg, conn).Detail(table)
 			if err != nil {
-				config.ErrorColor.Println(err.Error())
+				config.ErrorColor.Println(err)
+
 				return
 			}
 
 			for colName, col := range detail {
 				cmp, ok := compare[colName]
 				if !ok {
-					cmp = &db.Inspect{
-						Tables: make(map[string]*db.Column),
-					}
+					cmp = &db.Inspect{Tables: make(map[string]*db.Column)}
 					compare[colName] = cmp
 				}
 

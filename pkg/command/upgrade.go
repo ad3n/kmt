@@ -33,12 +33,12 @@ func (u *upgrade) Call() error {
 	wd := filepath.Join(temp, "kmt")
 	os.RemoveAll(wd)
 
-	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+	progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
 	progress.Suffix = " Checking new update... "
 	progress.Start()
 
 	repository, err := git.PlainClone(wd, &git.CloneOptions{
-		URL:   config.REPOSITORY,
+		URL:   config.Repository,
 		Depth: 1,
 	})
 	if err != nil {
@@ -48,8 +48,6 @@ func (u *upgrade) Call() error {
 		return nil
 	}
 
-	var tagsList []*tagInfo
-
 	tags, err := repository.Tags()
 	if err != nil {
 		progress.Stop()
@@ -58,6 +56,8 @@ func (u *upgrade) Call() error {
 
 		return nil
 	}
+
+	var tagsList []*tagInfo
 
 	_ = tags.ForEach(func(t *plumbing.Reference) error {
 		tag, err := repository.TagObject(t.Hash())
@@ -93,7 +93,7 @@ func (u *upgrade) Call() error {
 	}
 
 	latest := tagsList[0]
-	if latest.Name == config.VERSION_STRING {
+	if latest.Name == config.VersionString {
 		progress.Stop()
 		config.SuccessColor.Println("KMT is already up to date")
 
@@ -101,14 +101,12 @@ func (u *upgrade) Call() error {
 	}
 
 	progress.Stop()
-
 	progress.Suffix = " Updating KMT... "
 	progress.Start()
 
 	cmd := exec.Command("git", "checkout", latest.Name)
 	cmd.Dir = wd
-	err = cmd.Run()
-	if err != nil {
+	if err = cmd.Run(); err != nil {
 		progress.Stop()
 		config.ErrorColor.Println("Error checkout to latest tag")
 
@@ -135,14 +133,14 @@ func (u *upgrade) Call() error {
 	}
 
 	if binPath == "" {
-		output, err := exec.Command("which", "go").CombinedOutput()
+		out, err := exec.Command("which", "go").CombinedOutput()
 		if err != nil {
-			config.ErrorColor.Println(string(output))
+			config.ErrorColor.Println(string(out))
 
 			return err
 		}
 
-		binPath = strings.TrimSuffix(filepath.Dir(string(output)), "/")
+		binPath = strings.TrimSuffix(filepath.Dir(string(out)), "/")
 	}
 
 	cmd = exec.Command("mv", "kmt", filepath.Join(binPath, "kmt"))

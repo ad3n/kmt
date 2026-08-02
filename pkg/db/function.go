@@ -13,38 +13,36 @@ func NewFunction(db *sql.DB) *function {
 	return &function{db: db}
 }
 
-func (s *function) GenerateDdlSingle(schema string, function string) <-chan *Migration {
-	return streamMigration(s.db, fmt.Sprintf(QUERY_FUNCTION, schema, function), func(rows *sql.Rows) (*Migration, error) {
-		definition := Definition{}
-		err := rows.Scan(&definition.Name, &definition.Value, &definition.Param)
-		if err != nil {
-			fmt.Println(err.Error())
+func (f *function) GenerateDdlSingle(schema string, name string) <-chan *Migration {
+	return streamMigration(f.db, fmt.Sprintf(queryFunction, schema, name), func(rows *sql.Rows) (*Migration, error) {
+		var def Definition
+		if err := rows.Scan(&def.Name, &def.Value, &def.Param); err != nil {
+			fmt.Println(err)
 
 			return nil, err
 		}
 
 		return &Migration{
-			Name:       definition.Name,
-			UpScript:   fmt.Sprintf("%s;", definition.Value),
-			DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, definition.Name, definition.Param),
+			Name:       def.Name,
+			UpScript:   fmt.Sprintf("%s;", def.Value),
+			DownScript: fmt.Sprintf(secureDropFunction, def.Name, def.Param),
 		}, nil
 	})
 }
 
-func (s *function) GenerateDdl(schema string) <-chan *Migration {
-	return streamMigration(s.db, fmt.Sprintf(QUERY_LIST_FUNCTION, schema), func(rows *sql.Rows) (*Migration, error) {
-		definition := Definition{}
-		err := rows.Scan(&definition.Name, &definition.Value, &definition.Param)
-		if err != nil {
-			fmt.Println(err.Error())
+func (f *function) GenerateDdl(schema string) <-chan *Migration {
+	return streamMigration(f.db, fmt.Sprintf(queryListFunction, schema), func(rows *sql.Rows) (*Migration, error) {
+		var def Definition
+		if err := rows.Scan(&def.Name, &def.Value, &def.Param); err != nil {
+			fmt.Println(err)
 
 			return nil, err
 		}
 
 		return &Migration{
-			Name:       definition.Name,
-			UpScript:   fmt.Sprintf("%s;", definition.Value),
-			DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, definition.Name, definition.Param),
+			Name:       def.Name,
+			UpScript:   fmt.Sprintf("%s;", def.Value),
+			DownScript: fmt.Sprintf(secureDropFunction, def.Name, def.Param),
 		}, nil
 	})
 }

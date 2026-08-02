@@ -28,8 +28,7 @@ func (r *rollback) Call(source string, schema string, step int) error {
 		return nil
 	}
 
-	_, ok = dbConfig.Schemas[schema]
-	if !ok {
+	if _, ok = dbConfig.Schemas[schema]; !ok {
 		config.ErrorColor.Printf("Schema '%s' not found\n", config.BoldColor.Sprint(schema))
 
 		return nil
@@ -37,7 +36,7 @@ func (r *rollback) Call(source string, schema string, step int) error {
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -46,9 +45,8 @@ func (r *rollback) Call(source string, schema string, step int) error {
 	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(r.config.Folder, schema))
 	defer migrator.Close()
 
-	err = migrator.Steps(step * -1)
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
+	if err := migrator.Steps(step * -1); err != nil {
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
@@ -68,7 +66,12 @@ func (r *rollback) Call(source string, schema string, step int) error {
 		}
 	}
 
-	config.SuccessColor.Printf("Migration rolled back to %s on %s schema %s\n", config.BoldColor.Sprint(version), config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
+	config.SuccessColor.Printf(
+		"Migration rolled back to %s on %s schema %s\n",
+		config.BoldColor.Sprint(version),
+		config.BoldColor.Sprint(source),
+		config.BoldColor.Sprint(schema),
+	)
 
 	return nil
 }

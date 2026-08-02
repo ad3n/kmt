@@ -19,8 +19,8 @@ func NewCreate(config *config.Migration) *create {
 
 func (c *create) Call(schema string, name string) error {
 	valid := false
-	for _, c := range c.config.Connections {
-		if _, ok := c.Schemas[schema]; ok {
+	for _, conn := range c.config.Connections {
+		if _, ok := conn.Schemas[schema]; ok {
 			valid = true
 
 			break
@@ -38,22 +38,21 @@ func (c *create) Call(schema string, name string) error {
 
 	os.MkdirAll(migrationFolder, 0777)
 
-	name = fmt.Sprintf("%d_%s", version, name)
-	_, err := os.Create(filepath.Join(migrationFolder, name+".up.sql"))
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
+	filename := fmt.Sprintf("%d_%s", version, name)
+
+	if _, err := os.Create(filepath.Join(migrationFolder, filename+".up.sql")); err != nil {
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 
-	_, err = os.Create(filepath.Join(migrationFolder, name+".down.sql"))
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
+	if _, err := os.Create(filepath.Join(migrationFolder, filename+".down.sql")); err != nil {
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
 
-	config.SuccessColor.Printf("Migration created as %s\n", config.BoldColor.Sprint(name))
+	config.SuccessColor.Printf("Migration created as %s\n", config.BoldColor.Sprint(filename))
 
-	return err
+	return nil
 }

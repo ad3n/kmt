@@ -22,8 +22,7 @@ func (c *clean) Call(source string, schema string) error {
 		return nil
 	}
 
-	_, ok = dbConfig.Schemas[schema]
-	if !ok {
+	if _, ok = dbConfig.Schemas[schema]; !ok {
 		config.ErrorColor.Printf("Schema '%s' not found\n", schema)
 
 		return nil
@@ -31,7 +30,7 @@ func (c *clean) Call(source string, schema string) error {
 
 	db, err := config.NewConnection(dbConfig)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
+		config.ErrorColor.Println(err)
 
 		return nil
 	}
