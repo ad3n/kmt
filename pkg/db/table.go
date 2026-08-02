@@ -96,9 +96,6 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	}
 
 	cli := exec.Command(t.command, options...)
-	// Allocate a fresh, single-element slice instead of appending to the
-	// inherited process environment (cli.Env is nil by default, which means
-	// "inherit everything"; we only need PGPASSWORD so set exactly that).
 	cli.Env = []string{fmt.Sprintf("PGPASSWORD=%s", t.config.Password)}
 
 	skip := false
@@ -109,14 +106,11 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 		primaryKey = ""
 	}
 
-	// CombinedOutput returns a []byte; convert to string once and reuse.
 	rawOutput, _ := cli.CombinedOutput()
 	output := string(rawOutput)
 
 	lines := strings.Split(output, "\n")
 
-	// Pre-grow builders with a rough capacity estimate to reduce re-allocations
-	// when processing large DDL outputs (pg_dump can emit thousands of lines).
 	estimatedSize := len(output) / 2
 
 	var (
@@ -321,8 +315,6 @@ func (Table) isInsertScript(line string) bool {
 	return strings.Contains(line, insertInto)
 }
 
-// needsMoreLines reports whether the insert statement continues on the next
-// line (i.e. it does not end with ");").
 func (Table) needsMoreLines(line string) bool {
 	return !strings.HasSuffix(line, ");")
 }

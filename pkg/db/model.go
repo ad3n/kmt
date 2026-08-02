@@ -36,7 +36,6 @@ type (
 	}
 )
 
-// AddColumn and RemoveColumn are exported for use by callers formatting ALTER TABLE diff output.
 const (
 	AddColumn    = "ADD %s %s%s%s;\n"
 	RemoveColumn = "DROP COLUMN %s;\n"
@@ -237,11 +236,6 @@ WHERE table_name = '%s'
 ORDER BY ordinal_position;`
 )
 
-// streamMigration executes query against db, passes each row through builder,
-// and sends the results on the returned channel. The goroutine is protected by
-// ctx: if the caller cancels before draining all rows the goroutine exits
-// cleanly without leaking. Pass context.Background() when no cancellation is
-// needed.
 func streamMigration(db *sql.DB, query string, builder func(*sql.Rows) (*Migration, error)) <-chan *Migration {
 	return streamMigrationContext(context.Background(), db, query, builder)
 }
@@ -271,8 +265,6 @@ func streamMigrationContext(ctx context.Context, db *sql.DB, query string, build
 			select {
 			case ch <- item:
 			case <-ctx.Done():
-				// Consumer stopped early; drain the result set so the
-				// database connection is returned to the pool promptly.
 				return
 			}
 		}

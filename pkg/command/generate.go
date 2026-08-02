@@ -227,8 +227,6 @@ func (g *generate) generateTables(
 	cTable, tTable := g.getTables(nWorker, schema, scope.Tables, schemaConfig["excludes"]...)
 	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[connection], g.connection)
 	cDdl := make(chan *db.Ddl, nWorker)
-	// cInsert carries both the DDL and whether data should be written, avoiding
-	// a read from the shared scope.IncludeData field across goroutines.
 	cInsert := make(chan insertWork, nWorker)
 	cMigration := make(chan *migration, nWorker)
 
@@ -272,8 +270,6 @@ func (g *generate) generateTables(
 		defer close(cInsert)
 
 		for ddl := range cDdl {
-			// Capture includeData per-DDL so the insert goroutine does not
-			// need to read the shared scope field (eliminates data race).
 			cInsert <- insertWork{ddl: ddl, includeData: scope.IncludeData}
 
 			g.writeForeignKey(folder, ddl, v)
@@ -300,8 +296,6 @@ func (g *generate) generateTables(
 	return version + 1
 }
 
-// insertWork bundles a DDL result with its per-table includeData flag so the
-// insert writer goroutine never reads the shared GenerateScope concurrently.
 type insertWork struct {
 	ddl         *db.Ddl
 	includeData bool
@@ -343,8 +337,6 @@ func (g *generate) do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
 }
 
 func (g *generate) write(folder string, version int64, objectType, name, upScript, downScript string) {
-	// Pre-compute the base filename once to avoid two separate Sprintf + Join
-	// allocations for the up and down variants.
 	base := filepath.Join(folder, fmt.Sprintf("%d_%s_%s", version, objectType, name))
 
 	os.WriteFile(base+".up.sql", []byte(upScript), 0777)

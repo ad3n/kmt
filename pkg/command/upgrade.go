@@ -33,9 +33,6 @@ func (u *upgrade) Call() error {
 	wd := filepath.Join(temp, "kmt")
 	os.RemoveAll(wd)
 
-	// Ensure the temp clone directory is always cleaned up, regardless of
-	// which code path exits. The final explicit RemoveAll on success is kept
-	// for clarity but the defer is the safety net for all error returns.
 	defer os.RemoveAll(wd)
 
 	progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
@@ -161,7 +158,6 @@ func (u *upgrade) Call() error {
 	progress.Stop()
 	config.SuccessColor.Printf("KMT has been upgraded to %s\n", config.BoldColor.Sprint(latest.Name))
 
-	// Explicit cleanup on the happy path (defer above handles error paths).
 	os.RemoveAll(wd)
 
 	return nil

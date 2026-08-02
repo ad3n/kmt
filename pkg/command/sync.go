@@ -52,9 +52,6 @@ func (s *migrationSync) Run(source string, cluster string, schema string) error 
 	}()
 
 	for conn := range connCh {
-		// Use a closure so defer runs per-iteration, not at function return.
-		// This prevents db and migrator handles from accumulating until the
-		// outer function exits when the cluster has multiple connections.
 		err := func(conn *config.Connection) error {
 			db, err := config.NewConnection(conn)
 			if err != nil {
