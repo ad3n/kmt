@@ -41,20 +41,41 @@ type (
 )
 
 func NewConnection(database *Connection) (*sql.DB, error) {
-	var options strings.Builder
-	for k, v := range database.Options {
-		fmt.Fprintf(&options, "%s=%s ", k, v)
-	}
+	// Build the DSN in a single pass. When there are no extra options we skip
+	// the Builder entirely to avoid an unnecessary allocation.
+	var dsn string
 
-	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s %s",
-		database.Host,
-		database.Port,
-		database.User,
-		database.Password,
-		database.Name,
-		strings.TrimRight(options.String(), " "),
-	)
+	if len(database.Options) == 0 {
+		dsn = fmt.Sprintf(
+			"host=%s port=%d user=%s password=%s dbname=%s",
+			database.Host,
+			database.Port,
+			database.User,
+			database.Password,
+			database.Name,
+		)
+	} else {
+		// Pre-grow: base DSN is ~60 chars, each option averages ~20 chars.
+		var b strings.Builder
+		b.Grow(64 + len(database.Options)*24)
+
+		fmt.Fprintf(&b, "host=%s port=%d user=%s password=%s dbname=%s",
+			database.Host,
+			database.Port,
+			database.User,
+			database.Password,
+			database.Name,
+		)
+
+		for k, v := range database.Options {
+			b.WriteByte(' ')
+			b.WriteString(k)
+			b.WriteByte('=')
+			b.WriteString(v)
+		}
+
+		dsn = b.String()
+	}
 
 	return sql.Open("pgx", dsn)
 }

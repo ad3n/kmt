@@ -52,44 +52,55 @@ func (s *migrationSync) Run(source string, cluster string, schema string) error 
 	}()
 
 	for conn := range connCh {
-		db, err := config.NewConnection(conn)
-		if err != nil {
-			config.ErrorColor.Println(err)
+		// Use a closure so defer runs per-iteration, not at function return.
+		// This prevents db and migrator handles from accumulating until the
+		// outer function exits when the cluster has multiple connections.
+		err := func(conn *config.Connection) error {
+			db, err := config.NewConnection(conn)
+			if err != nil {
+				config.ErrorColor.Println(err)
 
-			return nil
-		}
-		defer db.Close()
+				return nil
+			}
+			defer db.Close()
 
-		migrator := config.NewMigrator(db, conn.Name, schema, filepath.Join(s.config.Folder, schema))
-		defer migrator.Close()
+			migrator := config.NewMigrator(db, conn.Name, schema, filepath.Join(s.config.Folder, schema))
+			defer migrator.Close()
 
-		progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
-		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(<-nameCh), config.BoldColor.Sprint(schema))
-		progress.Start()
+			progress := spinner.New(spinner.CharSets[config.SpinnerIndex], config.SpinnerDuration)
+			progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(<-nameCh), config.BoldColor.Sprint(schema))
+			progress.Start()
 
-		err = migrator.Up()
-		if errors.Is(err, gomigrate.ErrNoChange) {
+			err = migrator.Up()
+			if errors.Is(err, gomigrate.ErrNoChange) {
+				progress.Stop()
+
+				return nil
+			}
+
+			version, dirty, err := migrator.Version()
+			if err != nil {
+				return err
+			}
+
+			if version > 0 && dirty {
+				if err := migrator.Force(int(version)); err != nil {
+					return err
+				}
+
+				if err := migrator.Steps(-1); err != nil {
+					return err
+				}
+			}
+
 			progress.Stop()
 
-			continue
-		}
+			return nil
+		}(conn)
 
-		version, dirty, err := migrator.Version()
 		if err != nil {
 			return err
 		}
-
-		if version > 0 && dirty {
-			if err := migrator.Force(int(version)); err != nil {
-				return err
-			}
-
-			if err := migrator.Steps(-1); err != nil {
-				return err
-			}
-		}
-
-		progress.Stop()
 	}
 
 	config.SuccessColor.Printf("Migration synced on %s schema %s\n", config.BoldColor.Sprint(cluster), config.BoldColor.Sprint(schema))

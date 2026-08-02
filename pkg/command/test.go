@@ -53,12 +53,14 @@ func (t *test) Call() error {
 		err = func() error {
 			defer db.Close()
 
-			rows, err := db.Query("SELECT 1")
-			if err != nil {
+			// Use QueryRowContext so the single-row result is consumed
+			// immediately; no *Rows handle is left open on the connection.
+			var ping int
+			if err := db.QueryRow("SELECT 1").Scan(&ping); err != nil {
 				return err
 			}
 
-			return rows.Close()
+			return nil
 		}()
 
 		if err != nil {

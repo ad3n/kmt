@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -236,9 +237,19 @@ WHERE table_name = '%s'
 ORDER BY ordinal_position;`
 )
 
+// streamMigration executes query against db, passes each row through builder,
+// and sends the results on the returned channel. The goroutine is protected by
+// ctx: if the caller cancels before draining all rows the goroutine exits
+// cleanly without leaking. Pass context.Background() when no cancellation is
+// needed.
 func streamMigration(db *sql.DB, query string, builder func(*sql.Rows) (*Migration, error)) <-chan *Migration {
+	return streamMigrationContext(context.Background(), db, query, builder)
+}
+
+func streamMigrationContext(ctx context.Context, db *sql.DB, query string, builder func(*sql.Rows) (*Migration, error)) <-chan *Migration {
 	ch := make(chan *Migration)
-	rows, err := db.Query(query)
+
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		close(ch)
 
@@ -257,7 +268,13 @@ func streamMigration(db *sql.DB, query string, builder func(*sql.Rows) (*Migrati
 				continue
 			}
 
-			ch <- item
+			select {
+			case ch <- item:
+			case <-ctx.Done():
+				// Consumer stopped early; drain the result set so the
+				// database connection is returned to the pool promptly.
+				return
+			}
 		}
 
 		if err := rows.Err(); err != nil {

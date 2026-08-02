@@ -227,7 +227,9 @@ func (g *generate) generateTables(
 	cTable, tTable := g.getTables(nWorker, schema, scope.Tables, schemaConfig["excludes"]...)
 	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[connection], g.connection)
 	cDdl := make(chan *db.Ddl, nWorker)
-	cInsert := make(chan *db.Ddl, nWorker)
+	// cInsert carries both the DDL and whether data should be written, avoiding
+	// a read from the shared scope.IncludeData field across goroutines.
+	cInsert := make(chan insertWork, nWorker)
 	cMigration := make(chan *migration, nWorker)
 
 	var wg sync.WaitGroup
@@ -241,7 +243,6 @@ func (g *generate) generateTables(
 		wg.Add(1)
 
 		schemaOnly := !slices.Contains(schemaConfig["with_data"], tableName)
-		scope.IncludeData = !schemaOnly
 
 		cMigration <- &migration{
 			wg:         &wg,
@@ -271,7 +272,9 @@ func (g *generate) generateTables(
 		defer close(cInsert)
 
 		for ddl := range cDdl {
-			cInsert <- ddl
+			// Capture includeData per-DDL so the insert goroutine does not
+			// need to read the shared scope field (eliminates data race).
+			cInsert <- insertWork{ddl: ddl, includeData: scope.IncludeData}
 
 			g.writeForeignKey(folder, ddl, v)
 
@@ -283,9 +286,9 @@ func (g *generate) generateTables(
 	go func(v int64) {
 		defer writerWg.Done()
 
-		for ddl := range cInsert {
-			if scope.IncludeData {
-				g.writeInsert(folder, ddl, v)
+		for work := range cInsert {
+			if work.includeData {
+				g.writeInsert(folder, work.ddl, v)
 
 				v++
 			}
@@ -295,6 +298,13 @@ func (g *generate) generateTables(
 	writerWg.Wait()
 
 	return version + 1
+}
+
+// insertWork bundles a DDL result with its per-table includeData flag so the
+// insert writer goroutine never reads the shared GenerateScope concurrently.
+type insertWork struct {
+	ddl         *db.Ddl
+	includeData bool
 }
 
 func (g *generate) writeForeignKey(folder string, ddl *db.Ddl, version int64) {
@@ -333,15 +343,10 @@ func (g *generate) do(cMigration <-chan *migration, cDdl chan<- *db.Ddl) {
 }
 
 func (g *generate) write(folder string, version int64, objectType, name, upScript, downScript string) {
-	os.WriteFile(
-		filepath.Join(folder, fmt.Sprintf("%d_%s_%s.up.sql", version, objectType, name)),
-		[]byte(upScript),
-		0777,
-	)
+	// Pre-compute the base filename once to avoid two separate Sprintf + Join
+	// allocations for the up and down variants.
+	base := filepath.Join(folder, fmt.Sprintf("%d_%s_%s", version, objectType, name))
 
-	os.WriteFile(
-		filepath.Join(folder, fmt.Sprintf("%d_%s_%s.down.sql", version, objectType, name)),
-		[]byte(downScript),
-		0777,
-	)
+	os.WriteFile(base+".up.sql", []byte(upScript), 0777)
+	os.WriteFile(base+".down.sql", []byte(downScript), 0777)
 }

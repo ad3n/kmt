@@ -96,7 +96,10 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	}
 
 	cli := exec.Command(t.command, options...)
-	cli.Env = append(cli.Env, fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
+	// Allocate a fresh, single-element slice instead of appending to the
+	// inherited process environment (cli.Env is nil by default, which means
+	// "inherit everything"; we only need PGPASSWORD so set exactly that).
+	cli.Env = []string{fmt.Sprintf("PGPASSWORD=%s", t.config.Password)}
 
 	skip := false
 	waitForSemicolon := false
@@ -106,19 +109,31 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 		primaryKey = ""
 	}
 
+	// CombinedOutput returns a []byte; convert to string once and reuse.
+	rawOutput, _ := cli.CombinedOutput()
+	output := string(rawOutput)
+
+	lines := strings.Split(output, "\n")
+
+	// Pre-grow builders with a rough capacity estimate to reduce re-allocations
+	// when processing large DDL outputs (pg_dump can emit thousands of lines).
+	estimatedSize := len(output) / 2
+
 	var (
-		upScript           strings.Builder
-		downScript         strings.Builder
-		upReferenceScript  strings.Builder
+		upScript            strings.Builder
+		downScript          strings.Builder
+		upReferenceScript   strings.Builder
 		downReferenceScript strings.Builder
-		upForeignScript    strings.Builder
-		downForeignScript  strings.Builder
-		insertScript       strings.Builder
-		deleteScript       strings.Builder
+		upForeignScript     strings.Builder
+		downForeignScript   strings.Builder
+		insertScript        strings.Builder
+		deleteScript        strings.Builder
 	)
 
-	result, _ := cli.CombinedOutput()
-	lines := strings.Split(string(result), "\n")
+	upScript.Grow(estimatedSize)
+	downScript.Grow(estimatedSize / 4)
+	upReferenceScript.Grow(estimatedSize / 8)
+	downReferenceScript.Grow(estimatedSize / 8)
 
 	for n, line := range lines {
 		if t.skipLine(line) || skip {
@@ -131,39 +146,37 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 			if t.isDownReferenceScript(line) {
 				if t.isDownForeignKey(line) {
 					downForeignScript.WriteString(line)
-					downForeignScript.WriteString("\n")
+					downForeignScript.WriteByte('\n')
 
 					continue
 				}
 
 				downReferenceScript.WriteString(line)
-				downReferenceScript.WriteString("\n")
+				downReferenceScript.WriteByte('\n')
 
 				continue
 			}
 
 			downScript.WriteString(line)
-			downScript.WriteString("\n")
+			downScript.WriteByte('\n')
 
 			continue
 		}
 
 		if t.isReferenceScript(line, n, lines) {
-			if t.isForeignScript(lines[n+1]) {
+			next := lines[n+1]
+
+			if t.isForeignScript(next) {
 				upForeignScript.WriteString(line)
-				upForeignScript.WriteString("\n")
-				upForeignScript.WriteString(lines[n+1])
-				upForeignScript.WriteString("\n")
-
-				skip = true
-
-				continue
+				upForeignScript.WriteByte('\n')
+				upForeignScript.WriteString(next)
+				upForeignScript.WriteByte('\n')
+			} else {
+				upReferenceScript.WriteString(line)
+				upReferenceScript.WriteByte('\n')
+				upReferenceScript.WriteString(next)
+				upReferenceScript.WriteByte('\n')
 			}
-
-			upReferenceScript.WriteString(line)
-			upReferenceScript.WriteString("\n")
-			upReferenceScript.WriteString(lines[n+1])
-			upReferenceScript.WriteString("\n")
 
 			skip = true
 
@@ -171,15 +184,12 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 		}
 
 		if waitForSemicolon {
-			insertScript.WriteString("\n")
+			insertScript.WriteByte('\n')
 			insertScript.WriteString(line)
 
 			if !t.needsMoreLines(line) {
 				waitForSemicolon = false
-			}
-
-			if !waitForSemicolon {
-				insertScript.WriteString("\n")
+				insertScript.WriteByte('\n')
 			}
 		}
 
@@ -201,14 +211,14 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 			}
 
 			if !waitForSemicolon {
-				insertScript.WriteString("\n")
+				insertScript.WriteByte('\n')
 			}
 
 			continue
 		}
 
 		upScript.WriteString(line)
-		upScript.WriteString("\n")
+		upScript.WriteByte('\n')
 	}
 
 	return &Ddl{
@@ -311,8 +321,8 @@ func (Table) isInsertScript(line string) bool {
 	return strings.Contains(line, insertInto)
 }
 
-// needsMoreLines reports whether the insert statement continues on the next line
-// (i.e. it does not end with ");").
+// needsMoreLines reports whether the insert statement continues on the next
+// line (i.e. it does not end with ");").
 func (Table) needsMoreLines(line string) bool {
 	return !strings.HasSuffix(line, ");")
 }
