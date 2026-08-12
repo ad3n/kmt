@@ -48,8 +48,8 @@ func NewTable(command string, config *config.Connection, db *sql.DB) *Table {
 	return &Table{command: command, config: config, db: db}
 }
 
-func (t *Table) Detail(table string) (map[string]*Column, error) {
-	rows, err := t.db.Query(fmt.Sprintf(QUERY_DESCRIBE_TABLE, table))
+func (t *Table) Detail(schema, table string) (map[string]*Column, error) {
+	rows, err := t.db.Query(fmt.Sprintf(QUERY_DESCRIBE_TABLE, schema, table))
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +99,12 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 		t.config.Name,
 	}
 
+	if !schemaOnly {
+		options = append(options, "--inserts")
+	}
+
 	if schemaOnly {
 		options = append(options, "--schema-only")
-	} else {
-		options = append(options, "--inserts")
 	}
 
 	cli := exec.CommandContext(ctx, t.command, options...)
@@ -140,82 +142,102 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 	var waitForSemicolon bool
 	for readErr == nil {
 		nextLine, nextErr := readDumpLine(reader)
+		var insertContinuation bool
 
 		if t.skip(line) || skip {
 			skip = false
-		} else if t.downScript(line) {
+
+			goto next
+		}
+
+		if t.downScript(line) {
 			if t.downReferenceScript(line) {
 				if t.downForeignkey(line) {
 					downForeignScript.WriteString(line)
 					downForeignScript.WriteString("\n")
-				} else {
-					downReferenceScript.WriteString(line)
-					downReferenceScript.WriteString("\n")
+
+					goto next
 				}
-			} else {
-				downScript.WriteString(line)
-				downScript.WriteString("\n")
+
+				downReferenceScript.WriteString(line)
+				downReferenceScript.WriteString("\n")
+
+				goto next
 			}
-		} else if t.referenceScript(line, nextLine) {
+
+			downScript.WriteString(line)
+			downScript.WriteString("\n")
+
+			goto next
+		}
+
+		if t.referenceScript(line, nextLine) {
 			if t.foreignScript(nextLine) {
 				upForeignScript.WriteString(line)
 				upForeignScript.WriteString("\n")
 				upForeignScript.WriteString(nextLine)
 				upForeignScript.WriteString("\n")
-			} else {
-				upReferenceScript.WriteString(line)
-				upReferenceScript.WriteString("\n")
-				upReferenceScript.WriteString(nextLine)
-				upReferenceScript.WriteString("\n")
+
+				skip = true
+
+				goto next
 			}
+
+			upReferenceScript.WriteString(line)
+			upReferenceScript.WriteString("\n")
+			upReferenceScript.WriteString(nextLine)
+			upReferenceScript.WriteString("\n")
+
 			skip = true
-		} else {
-			insertContinuation := waitForSemicolon
-			if waitForSemicolon {
+
+			goto next
+		}
+
+		insertContinuation = waitForSemicolon
+		if waitForSemicolon {
+			insertScript.WriteString("\n")
+			insertScript.WriteString(line)
+
+			if !t.waitForSemicolon(line) {
+				waitForSemicolon = false
+			}
+
+			if !waitForSemicolon {
 				insertScript.WriteString("\n")
-				insertScript.WriteString(line)
-
-				if !t.waitForSemicolon(line) {
-					waitForSemicolon = false
-				}
-
-				if !waitForSemicolon {
-					insertScript.WriteString("\n")
-				}
-			}
-
-			if insertContinuation {
-				line = nextLine
-				readErr = nextErr
-
-				continue
-			}
-
-			if t.insertScript(line) {
-				if t.waitForSemicolon(line) {
-					waitForSemicolon = true
-				}
-
-				insertScript.WriteString(line)
-				if primaryKey != "" {
-					deleteScript.WriteString("DELETE FROM ")
-					deleteScript.WriteString(name)
-					deleteScript.WriteString(" WHERE ")
-					deleteScript.WriteString(primaryKey)
-					deleteScript.WriteString(" = ")
-					deleteScript.WriteString(t.keyValue(line, name, !waitForSemicolon))
-					deleteScript.WriteString(";\n")
-				}
-
-				if !waitForSemicolon {
-					insertScript.WriteString("\n")
-				}
-			} else {
-				upScript.WriteString(line)
-				upScript.WriteString("\n")
 			}
 		}
 
+		if insertContinuation {
+			goto next
+		}
+
+		if t.insertScript(line) {
+			if t.waitForSemicolon(line) {
+				waitForSemicolon = true
+			}
+
+			insertScript.WriteString(line)
+			if primaryKey != "" {
+				deleteScript.WriteString("DELETE FROM ")
+				deleteScript.WriteString(name)
+				deleteScript.WriteString(" WHERE ")
+				deleteScript.WriteString(primaryKey)
+				deleteScript.WriteString(" = ")
+				deleteScript.WriteString(t.keyValue(line, name, !waitForSemicolon))
+				deleteScript.WriteString(";\n")
+			}
+
+			if !waitForSemicolon {
+				insertScript.WriteString("\n")
+			}
+
+			goto next
+		}
+
+		upScript.WriteString(line)
+		upScript.WriteString("\n")
+
+	next:
 		line = nextLine
 		readErr = nextErr
 	}

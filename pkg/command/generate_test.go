@@ -83,6 +83,7 @@ func TestGenerateTablesKeepsOrderAndPerTableDataScope(t *testing.T) {
 		"105_foreign_key_public_fast.up.sql", "105_foreign_key_public_fast.down.sql",
 		"106_insert_public_slow.up.sql", "106_insert_public_slow.down.sql",
 	}
+
 	entries, err := os.ReadDir(folder)
 	if err != nil {
 		t.Fatal(err)
@@ -165,6 +166,7 @@ func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	t.Cleanup(func() {
 		connection.Close()
 	})
@@ -174,6 +176,7 @@ func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 	if fail {
 		failLine = "echo simulated failure >&2\nexit 2"
 	}
+
 	script := "#!/bin/sh\n" +
 		"if [ \"$1\" = \"--version\" ]; then echo 'pg_dump test'; exit 0; fi\n" +
 		failLine + "\n" +

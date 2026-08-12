@@ -334,6 +334,7 @@ func (g *generate) generateTablesContext(
 	for range nWorker {
 		go g.do(ctx, ddlTool, cMigration, cResult, &workers)
 	}
+
 	go func() {
 		workers.Wait()
 		close(cResult)
@@ -402,6 +403,7 @@ func (g *generate) generateTablesContext(
 
 			continue
 		}
+
 		if ddl.Reference.UpScript != "" {
 			if err := g.write(folder, job.version+1, "primary_key", job.table, ddl.Reference.UpScript, ddl.Reference.DownScript); err != nil {
 				if firstErr == nil {
@@ -412,10 +414,12 @@ func (g *generate) generateTablesContext(
 				continue
 			}
 		}
+
 		if err := g.writeForeignKey(folder, ddl, fkBase+int64(job.index)); err != nil && firstErr == nil {
 			firstErr = err
 			cancel()
 		}
+
 		if job.includeData {
 			if err := g.writeInsert(folder, ddl, insertBase+int64(job.index)); err != nil && firstErr == nil {
 				firstErr = err
@@ -423,6 +427,7 @@ func (g *generate) generateTablesContext(
 			}
 		}
 	}
+
 	if firstErr != nil {
 		return version, firstErr
 	}
@@ -511,6 +516,7 @@ func writeAtomic(path, content string) error {
 	if err != nil {
 		return fmt.Errorf("create temporary migration for %s: %w", path, err)
 	}
+
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
 	if err := tmp.Chmod(0644); err != nil {

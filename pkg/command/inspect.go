@@ -27,7 +27,7 @@ func (i *inspect) Describe(table string, schema string, connection string) map[s
 	}
 	defer conn.Close()
 
-	result, err := db.NewTable("", cfg, conn).Detail(table)
+	result, err := db.NewTable("", cfg, conn).Detail(schema, table)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
@@ -56,9 +56,10 @@ func (i *inspect) Compare(table string, schema string, dbs ...string) map[string
 		func() {
 			defer conn.Close()
 
-			detail, err := db.NewTable("", cfg, conn).Detail(table)
+			detail, err := db.NewTable("", cfg, conn).Detail(schema, table)
 			if err != nil {
 				config.ErrorColor.Println(err.Error())
+
 				return
 			}
 
@@ -68,6 +69,7 @@ func (i *inspect) Compare(table string, schema string, dbs ...string) map[string
 					cmp = &db.Inspect{
 						Tables: make(map[string]*db.Column),
 					}
+
 					compare[colName] = cmp
 				}
 

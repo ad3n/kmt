@@ -19,6 +19,31 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+func parseFlagList(value string) []string {
+	values := strings.Split(value, ",")
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, item := range values {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+
+		if item == "all" {
+			return []string{"all"}
+		}
+
+		if _, ok := seen[item]; ok {
+			continue
+		}
+
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+
+	return result
+}
+
 func main() {
 	cfg := config.Parse(config.CONFIG_FILE)
 	app := &cli.Command{
@@ -202,28 +227,34 @@ func main() {
 				Aliases: []string{"gn"},
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:  "table",
-						Usage: "tables to generate migration file(s)",
+						Name:    "table",
+						Aliases: []string{"tables"},
+						Usage:   "comma-separated tables to generate, or 'all'",
 					},
 					&cli.StringFlag{
-						Name:  "view",
-						Usage: "views to generate migration file(s)",
+						Name:    "view",
+						Aliases: []string{"views"},
+						Usage:   "comma-separated views to generate, or 'all'",
 					},
 					&cli.StringFlag{
-						Name:  "function",
-						Usage: "functions to generate migration file(s)",
+						Name:    "function",
+						Aliases: []string{"functions"},
+						Usage:   "comma-separated functions to generate, or 'all'",
 					},
 					&cli.StringFlag{
-						Name:  "mview",
-						Usage: "materialized views to generate migration file(s)",
+						Name:    "mview",
+						Aliases: []string{"mviews"},
+						Usage:   "comma-separated materialized views to generate, or 'all'",
 					},
 					&cli.StringFlag{
-						Name:  "enum",
-						Usage: "enums to generate migration file(s)",
+						Name:    "enum",
+						Aliases: []string{"enums"},
+						Usage:   "comma-separated enums to generate, or 'all'",
 					},
 					&cli.BoolFlag{
-						Name:  "include-data",
-						Usage: "include data option when table option active",
+						Name:    "include-data",
+						Aliases: []string{"data"},
+						Usage:   "include data for every generated table",
 					},
 				},
 				Description: "generate <connection> [<schema> [--table=<tables> --view=<views> --function=<functions> --mview=<mviews> --include-data]",
@@ -231,6 +262,10 @@ func main() {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 1 {
 						return errors.New("not enough arguments. Usage: kmt generate <connection> [<schema> [--table=<tables> --view=<views> --function=<functions> --mview=<mviews> --include-data]")
+					}
+
+					if cmd.NArg() > 2 {
+						return errors.New("too many arguments. Usage: kmt generate <connection> [<schema>] [options]")
 					}
 
 					connection := cmd.Args().Get(0)
@@ -255,8 +290,10 @@ func main() {
 							Functions:         []string{"all"},
 							Views:             []string{"all"},
 							MaterializedViews: []string{"all"},
+							IncludeData:       cmd.Bool("include-data"),
 						}
 					}
+
 					if len(args) == 1 {
 						for schema := range source.Schemas {
 							if err := cmdGenerate.CallContext(ctx, connection, schema, defaultScope()); err != nil {
@@ -270,28 +307,30 @@ func main() {
 
 					schema := args[1]
 					scope := &command.GenerateScope{}
+					scope.IncludeData = cmd.Bool("include-data")
 					if cmd.String("table") == "" && cmd.String("enum") == "" && cmd.String("view") == "" && cmd.String("mview") == "" && cmd.String("function") == "" {
 						scope = defaultScope()
-					}
-					if table := cmd.String("table"); table != "" {
-						scope.Tables = strings.Split(table, ",")
 						scope.IncludeData = cmd.Bool("include-data")
 					}
 
+					if table := cmd.String("table"); table != "" {
+						scope.Tables = parseFlagList(table)
+					}
+
 					if enum := cmd.String("enum"); enum != "" {
-						scope.Enums = strings.Split(enum, ",")
+						scope.Enums = parseFlagList(enum)
 					}
 
 					if view := cmd.String("view"); view != "" {
-						scope.Views = strings.Split(view, ",")
+						scope.Views = parseFlagList(view)
 					}
 
 					if mview := cmd.String("mview"); mview != "" {
-						scope.MaterializedViews = strings.Split(mview, ",")
+						scope.MaterializedViews = parseFlagList(mview)
 					}
 
 					if function := cmd.String("function"); function != "" {
-						scope.Functions = strings.Split(function, ",")
+						scope.Functions = parseFlagList(function)
 					}
 
 					return cmdGenerate.CallContext(ctx, connection, schema, scope)
@@ -324,11 +363,9 @@ func main() {
 						}
 
 						sync := vFile == vDb
-						var status string
+						status := color.New(color.FgRed, color.Bold).Sprint("x")
 						if sync {
 							status = color.New(color.FgGreen).Sprint("v")
-						} else {
-							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
 						t.AddRow("1", db, schema, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
@@ -353,11 +390,9 @@ func main() {
 							}
 
 							sync := vFile == vDb
-							var status string
+							status := color.New(color.FgRed, color.Bold).Sprint("x")
 							if sync {
 								status = color.New(color.FgGreen).Sprint("v")
-							} else {
-								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
 							t.AddRow(color.New(color.Bold).Sprint(number), db, k, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
@@ -383,11 +418,9 @@ func main() {
 							}
 
 							sync := vFile == vDb
-							var status string
+							status := color.New(color.FgRed, color.Bold).Sprint("x")
 							if sync {
 								status = color.New(color.FgGreen).Sprint("v")
-							} else {
-								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
 							t.AddRow(color.New(color.Bold).Sprint(number), c, k, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
@@ -448,11 +481,9 @@ func main() {
 						}
 
 						sync := vSource == vCompare
-						var status string
+						status := color.New(color.FgRed, color.Bold).Sprint("x")
 						if sync {
 							status = color.New(color.FgGreen).Sprint("v")
-						} else {
-							status = color.New(color.FgRed, color.Bold).Sprint("x")
 						}
 
 						t.AddRow("1", schema, strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
@@ -490,11 +521,9 @@ func main() {
 							version, _ := strconv.Atoi(file[0])
 
 							sync := uint(version) == vSource && vSource == vCompare
-							var status string
+							status := color.New(color.FgRed, color.Bold).Sprint("x")
 							if sync {
 								status = color.New(color.FgGreen).Sprint("v")
-							} else {
-								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
 							t.AddRow(color.New(color.Bold).Sprint(number), k, strconv.Itoa(version), strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
@@ -514,11 +543,19 @@ func main() {
 				Description: "inspect <table> <schema> <connection1> [<connection2> ... --dump]",
 				Usage:       "Inspect <table> on <schema> on <connection1> [<connection2> ... --dump]",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "dump", Aliases: []string{"d"}},
+					&cli.BoolFlag{
+						Name:    "dump",
+						Aliases: []string{"d"},
+						Usage:   "print SQL to synchronize every target with the first connection",
+					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() < 3 {
 						return errors.New("not enough arguments. Usage: kmt inspect <table> <schema> <connection1> [<connection2> ... --dump]")
+					}
+
+					if cmd.Bool("dump") && cmd.NArg() < 4 {
+						return errors.New("dump requires at least two connections. Usage: kmt inspect <table> <schema> <connection1> <connection2> [<connection3> ...] --dump")
 					}
 
 					cmdInspect := command.NewInspect(cfg.Migration)
@@ -535,11 +572,9 @@ func main() {
 
 						number := 1
 						for k, v := range columns {
-							var status string
+							status := color.New(color.FgRed, color.Bold).Sprint("x")
 							if v.Nullable {
 								status = color.New(color.FgGreen).Sprint("v")
-							} else {
-								status = color.New(color.FgRed, color.Bold).Sprint("x")
 							}
 
 							t.AddRow(color.New(color.Bold).Sprint(number), color.New(color.Bold).Sprint(k), v.DataType, status, v.DefaultValue)
@@ -629,7 +664,7 @@ func main() {
 								dst := compare.Tables[target]
 								if ref != nil && dst == nil {
 									if sql == "" {
-										sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
+										sql = fmt.Sprintf("ALTER TABLE %s.%s\n", cmd.Args().Get(1), cmd.Args().Get(0))
 									}
 
 									var nullable string
@@ -647,10 +682,46 @@ func main() {
 
 								if ref == nil && dst != nil {
 									if sql == "" {
-										sql = fmt.Sprintf("ALTER TABLE %s\n", cmd.Args().Get(0))
+										sql = fmt.Sprintf("ALTER TABLE %s.%s\n", cmd.Args().Get(1), cmd.Args().Get(0))
 									}
 
 									sql += fmt.Sprintf(db.REMOVE_COLUMN, columnName)
+								}
+
+								if ref != nil && dst != nil {
+									if ref.DataType != dst.DataType {
+										if sql == "" {
+											sql = fmt.Sprintf("ALTER TABLE %s.%s\n", cmd.Args().Get(1), cmd.Args().Get(0))
+										}
+
+										sql += fmt.Sprintf(db.ALTER_COLUMN_TYPE, columnName, ref.DataType)
+									}
+
+									if ref.Nullable != dst.Nullable {
+										if sql == "" {
+											sql = fmt.Sprintf("ALTER TABLE %s.%s\n", cmd.Args().Get(1), cmd.Args().Get(0))
+										}
+
+										nullableSql := fmt.Sprintf(db.ALTER_COLUMN_SET_NOT_NULL, columnName)
+										if ref.Nullable {
+											nullableSql = fmt.Sprintf(db.ALTER_COLUMN_DROP_NOT_NULL, columnName)
+										}
+
+										sql += nullableSql
+									}
+
+									if ref.DefaultValue != dst.DefaultValue {
+										if sql == "" {
+											sql = fmt.Sprintf("ALTER TABLE %s.%s\n", cmd.Args().Get(1), cmd.Args().Get(0))
+										}
+
+										defaultSql := fmt.Sprintf(db.ALTER_COLUMN_SET_DEFAULT, columnName, ref.DefaultValue)
+										if ref.DefaultValue == "" {
+											defaultSql = fmt.Sprintf(db.ALTER_COLUMN_DROP_DEFAULT, columnName)
+										}
+
+										sql += defaultSql
+									}
 								}
 							}
 
@@ -662,7 +733,15 @@ func main() {
 								)
 
 								color.New(color.FgGreen).Println(sql)
+
+								continue
 							}
+
+							color.New(color.FgYellow, color.Bold).Printf(
+								"\n-- Sync %s -> %s: no changes\n",
+								reference,
+								target,
+							)
 						}
 					}
 
