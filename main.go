@@ -247,9 +247,22 @@ func main() {
 
 					cmdGenerate := command.NewGenerate(cfg.Migration, db)
 					args := cmd.Args().Slice()
-					if len(args) == 0 {
+					defaultScope := func() *command.GenerateScope {
+
+						return &command.GenerateScope{
+							Tables:            []string{"all"},
+							Enums:             []string{"all"},
+							Functions:         []string{"all"},
+							Views:             []string{"all"},
+							MaterializedViews: []string{"all"},
+						}
+					}
+					if len(args) == 1 {
 						for schema := range source.Schemas {
-							cmdGenerate.Call(connection, schema, &command.GenerateScope{})
+							if err := cmdGenerate.Call(connection, schema, defaultScope()); err != nil {
+
+								return err
+							}
 						}
 
 						return nil
@@ -257,6 +270,9 @@ func main() {
 
 					schema := args[1]
 					scope := &command.GenerateScope{}
+					if cmd.String("table") == "" && cmd.String("enum") == "" && cmd.String("view") == "" && cmd.String("mview") == "" && cmd.String("function") == "" {
+						scope = defaultScope()
+					}
 					if table := cmd.String("table"); table != "" {
 						scope.Tables = strings.Split(table, ",")
 						scope.IncludeData = cmd.Bool("include-data")

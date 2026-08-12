@@ -25,8 +25,8 @@ func (s *materialized) GenerateDdlSingle(schema string, view string) <-chan *Mig
 
 		return &Migration{
 			Name:       definition.Name,
-			UpScript:   definition.Value,
-			DownScript: fmt.Sprintf(SECURE_DROP_VIEW, definition.Name),
+			UpScript:   fmt.Sprintf(SECURE_CREATE_MATERIALIZED_VIEW, definition.Name, definition.Value),
+			DownScript: fmt.Sprintf(SECURE_DROP_MATERIALIZED_VIEW, definition.Name),
 		}, nil
 	})
 }
@@ -43,8 +43,8 @@ func (s *materialized) GenerateDdl(schema string) <-chan *Migration {
 
 		return &Migration{
 			Name:       definition.Name,
-			UpScript:   definition.Value,
-			DownScript: fmt.Sprintf(SECURE_DROP_VIEW, definition.Name),
+			UpScript:   fmt.Sprintf(SECURE_CREATE_MATERIALIZED_VIEW, definition.Name, definition.Value),
+			DownScript: fmt.Sprintf(SECURE_DROP_MATERIALIZED_VIEW, definition.Name),
 		}, nil
 	})
 }

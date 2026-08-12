@@ -1,8 +1,13 @@
 package db
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -70,7 +75,11 @@ func (t *Table) Detail(table string) (map[string]*Column, error) {
 	return result, nil
 }
 
-func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
+func (t *Table) Generate(name string, schemaOnly bool) (*Ddl, error) {
+	return t.GenerateContext(context.Background(), name, schemaOnly)
+}
+
+func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly bool) (*Ddl, error) {
 	options := []string{
 		"--no-comments",
 		"--no-publications",
@@ -96,16 +105,18 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 		options = append(options, "--inserts")
 	}
 
-	cli := exec.Command(t.command, options...)
+	cli := exec.CommandContext(ctx, t.command, options...)
 
-	cli.Env = append(cli.Env, fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
-
-	var skip bool = false
-	var waitForSemicolon bool = false
+	cli.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
 
 	primaryKey := t.primaryKey(name)
 	if primaryKey == name {
 		primaryKey = ""
+	}
+
+	stdout, err := cli.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("read pg_dump output for table %s: %w", name, err)
 	}
 
 	var upScript strings.Builder
@@ -117,97 +128,107 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 	var insertScript strings.Builder
 	var deleteScript strings.Builder
 
-	result, _ := cli.CombinedOutput()
-	lines := strings.Split(string(result), "\n")
-	for n, line := range lines {
+	var stderr bytes.Buffer
+	cli.Stderr = &stderr
+	if err := cli.Start(); err != nil {
+		return nil, fmt.Errorf("start pg_dump for table %s: %w", name, err)
+	}
+
+	reader := bufio.NewReaderSize(stdout, 64*1024)
+	line, readErr := readDumpLine(reader)
+	var skip bool
+	var waitForSemicolon bool
+	for readErr == nil {
+		nextLine, nextErr := readDumpLine(reader)
+
 		if t.skip(line) || skip {
 			skip = false
-
-			continue
-		}
-
-		if t.downScript(line) {
+		} else if t.downScript(line) {
 			if t.downReferenceScript(line) {
 				if t.downForeignkey(line) {
 					downForeignScript.WriteString(line)
 					downForeignScript.WriteString("\n")
-
-					continue
+				} else {
+					downReferenceScript.WriteString(line)
+					downReferenceScript.WriteString("\n")
 				}
-
-				downReferenceScript.WriteString(line)
-				downReferenceScript.WriteString("\n")
-
-				continue
+			} else {
+				downScript.WriteString(line)
+				downScript.WriteString("\n")
 			}
-
-			downScript.WriteString(line)
-			downScript.WriteString("\n")
-
-			continue
-		}
-
-		if t.refereceScript(line, n, lines) {
-			if t.foreignScript(lines[n+1]) {
+		} else if t.referenceScript(line, nextLine) {
+			if t.foreignScript(nextLine) {
 				upForeignScript.WriteString(line)
 				upForeignScript.WriteString("\n")
-				upForeignScript.WriteString(lines[n+1])
+				upForeignScript.WriteString(nextLine)
 				upForeignScript.WriteString("\n")
+			} else {
+				upReferenceScript.WriteString(line)
+				upReferenceScript.WriteString("\n")
+				upReferenceScript.WriteString(nextLine)
+				upReferenceScript.WriteString("\n")
+			}
+			skip = true
+		} else {
+			insertContinuation := waitForSemicolon
+			if waitForSemicolon {
+				insertScript.WriteString("\n")
+				insertScript.WriteString(line)
 
-				skip = true
+				if !t.waitForSemicolon(line) {
+					waitForSemicolon = false
+				}
+
+				if !waitForSemicolon {
+					insertScript.WriteString("\n")
+				}
+			}
+
+			if insertContinuation {
+				line = nextLine
+				readErr = nextErr
 
 				continue
 			}
 
-			upReferenceScript.WriteString(line)
-			upReferenceScript.WriteString("\n")
-			upReferenceScript.WriteString(lines[n+1])
-			upReferenceScript.WriteString("\n")
+			if t.insertScript(line) {
+				if t.waitForSemicolon(line) {
+					waitForSemicolon = true
+				}
 
-			skip = true
+				insertScript.WriteString(line)
+				if primaryKey != "" {
+					deleteScript.WriteString("DELETE FROM ")
+					deleteScript.WriteString(name)
+					deleteScript.WriteString(" WHERE ")
+					deleteScript.WriteString(primaryKey)
+					deleteScript.WriteString(" = ")
+					deleteScript.WriteString(t.keyValue(line, name, !waitForSemicolon))
+					deleteScript.WriteString(";\n")
+				}
 
-			continue
+				if !waitForSemicolon {
+					insertScript.WriteString("\n")
+				}
+			} else {
+				upScript.WriteString(line)
+				upScript.WriteString("\n")
+			}
 		}
 
-		if waitForSemicolon {
-			insertScript.WriteString("\n")
-			insertScript.WriteString(line)
+		line = nextLine
+		readErr = nextErr
+	}
 
-			if !t.waitForSemicolon(line) {
-				waitForSemicolon = false
-			}
+	if readErr != io.EOF {
+		cli.Process.Kill()
+		cli.Wait()
 
-			if !waitForSemicolon {
-				insertScript.WriteString("\n")
-			}
-		}
+		return nil, fmt.Errorf("read pg_dump table %s: %w", name, readErr)
+	}
 
-		if t.insertScript(line) {
-			if t.waitForSemicolon(line) {
-				waitForSemicolon = true
-			}
-
-			insertScript.WriteString(line)
-			if primaryKey != "" {
-				deleteScript.WriteString("DELETE FROM ")
-				deleteScript.WriteString(name)
-				deleteScript.WriteString(" WHERE ")
-				deleteScript.WriteString(primaryKey)
-				deleteScript.WriteString(" = ")
-				deleteScript.WriteString(t.keyValue(line, name, !waitForSemicolon))
-				deleteScript.WriteString(";\n")
-			}
-
-			if !waitForSemicolon {
-				insertScript.WriteString("\n")
-			}
-
-			continue
-		}
-
-		upScript.WriteString(line)
-		upScript.WriteString("\n")
-
+	if err := cli.Wait(); err != nil {
+		return nil, fmt.Errorf("pg_dump table %s: %w: %s", name, err, strings.TrimSpace(stderr.String()))
 	}
 
 	return &Ddl{
@@ -228,7 +249,18 @@ func (t *Table) Generate(name string, schemaOnly bool) *Ddl {
 			UpScript:   upForeignScript.String(),
 			DownScript: downForeignScript.String(),
 		},
+	}, nil
+}
+
+func readDumpLine(reader *bufio.Reader) (string, error) {
+	line, err := reader.ReadString('\n')
+	if len(line) > 0 {
+		line = strings.TrimSuffix(line, "\n")
+
+		return line, nil
 	}
+
+	return "", err
 }
 
 func (t *Table) primaryKey(name string) string {
@@ -300,12 +332,8 @@ func (Table) foreignScript(line string) bool {
 	return strings.Contains(line, FOREIGN_KEY)
 }
 
-func (Table) refereceScript(line string, n int, lines []string) bool {
-	if n+1 >= len(lines) {
-		return false
-	}
-
-	return strings.Contains(line, ALTER_TABLE) && strings.Contains(lines[n+1], ADD_CONSTRAINT)
+func (Table) referenceScript(line, nextLine string) bool {
+	return strings.Contains(line, ALTER_TABLE) && strings.Contains(nextLine, ADD_CONSTRAINT)
 }
 
 func (Table) insertScript(line string) bool {

@@ -69,6 +69,7 @@ const (
 	SECURE_CREATE_MATERIALIZED_VIEW = "CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS %s"
 
 	SECURE_DROP_VIEW = "DROP VIEW IF EXISTS %s;"
+	SECURE_DROP_MATERIALIZED_VIEW = "DROP MATERIALIZED VIEW IF EXISTS %s;"
 
 	SECURE_DROP_TYPE = "DROP TYPE IF EXISTS %s;"
 
@@ -117,7 +118,7 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n
     ON n.oid = p.pronamespace
-WHERE n.nspname = '%s' AND function_name = '%s';`
+WHERE n.nspname = '%s' AND p.proname = '%s';`
 
 	QUERY_LIST_ENUM = `
 SELECT
@@ -175,7 +176,7 @@ WHERE ( t.typrelid = 0
     AND n.nspname <> 'pg_catalog'
     AND n.nspname <> 'information_schema'
     AND n.nspname = '%s'
-    AND name = '%s';`
+    AND t.typname = '%s';`
 
 	QUERY_LIST_TABLE = `
 SELECT
@@ -205,7 +206,7 @@ SELECT
     COALESCE(table_name, '') AS view_name,
     COALESCE(view_definition, '') AS definition
 FROM information_schema.views
-WHERE table_schema = '%s' AND view_name  = '%s'
+WHERE table_schema = '%s' AND table_name = '%s'
 ORDER BY table_name;`
 
 	QUERY_LIST_MATERIALIZED_VIEW = `
@@ -221,7 +222,7 @@ SELECT
     matviewname AS view_name,
     definition AS definition
 FROM pg_matviews
-WHERE schemaname = '%s' AND view_name = '%s';`
+WHERE schemaname = '%s' AND matviewname = '%s';`
 
 	QUERY_DESCRIBE_TABLE = `
 SELECT
