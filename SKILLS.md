@@ -11,6 +11,17 @@ This file describes the project-specific knowledge required to work safely on KM
 - Propagate `context.Context` into cancellable database and subprocess operations.
 - Keep presentation in `main.go` and workflows in `pkg/command`.
 
+### Go Syntax and Formatting
+
+- Do not use `else`; express the same flow with guard clauses, early returns, `continue`, or default values followed by an `if`.
+- Do not place a blank line immediately after an opening block brace.
+- Place a blank line after the closing brace of `if`, `for`, `switch`, and similar blocks before the next statement.
+- Omit that blank line when the next statement is `defer`.
+- Do not force a blank line between consecutive closing braces.
+- Place a blank line before `return` when preceding statements exist in the same multi-line block.
+- Run `gofmt` after applying the project style.
+- Refactor syntax only when the resulting control flow and output remain identical.
+
 ### PostgreSQL Migration Management
 
 - Work with `golang-migrate` using one migration history per schema.
@@ -69,4 +80,3 @@ This file describes the project-specific knowledge required to work safely on KM
 5. Compare generated filenames and SQL content with the expected flow.
 6. Run normal tests, race tests, vet, and formatting checks.
 7. Report any validation that could not be performed against a real PostgreSQL database.
-

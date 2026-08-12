@@ -20,16 +20,43 @@ The main components are:
 - Do not change public command behavior unless explicitly requested.
 - Use `gofmt` for every modified Go file.
 - Use clear multi-line code instead of dense one-line statements.
-- Do not add a blank line immediately after an opening brace.
-- Add a blank line before `return` when it follows other statements in a multi-line block.
 
-Example:
+## Go Syntax Style
+
+- Do not use `else`. Use guard clauses, early returns, `continue`, default values followed by an `if`, or another flow-preserving structure.
+- Do not add a blank line immediately after the opening brace of `if`, `for`, `switch`, function, or similar blocks.
+- Add a blank line after the closing brace of an `if`, `for`, `switch`, or similar block before the next statement.
+- Do not add a blank line after a closing brace when the next statement is `defer`.
+- A closing brace followed by another closing brace does not require a blank line.
+- Add a blank line before `return` when the same multi-line block contains preceding statements.
+- Preserve control flow exactly when applying these formatting rules.
+
+Examples:
 
 ```go
 if err != nil {
 	progress.Stop()
 
 	return err
+}
+
+runNextStep()
+```
+
+```go
+db, err := config.NewConnection(source)
+if err != nil {
+	return err
+}
+defer db.Close()
+```
+
+Instead of `else`, initialize the default and override it:
+
+```go
+status := errorStatus
+if valid {
+	status = successStatus
 }
 ```
 
@@ -117,4 +144,3 @@ Do not require a live PostgreSQL instance for unit tests. Prefer a deterministic
 - Never drop, migrate, clean, rollback, or modify a real database during tests without explicit authorization.
 - Never print database passwords or connection strings containing credentials.
 - Inspect exact targets before filesystem cleanup or database mutation.
-
