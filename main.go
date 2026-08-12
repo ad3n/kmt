@@ -259,7 +259,7 @@ func main() {
 					}
 					if len(args) == 1 {
 						for schema := range source.Schemas {
-							if err := cmdGenerate.Call(connection, schema, defaultScope()); err != nil {
+							if err := cmdGenerate.CallContext(ctx, connection, schema, defaultScope()); err != nil {
 
 								return err
 							}
@@ -294,7 +294,7 @@ func main() {
 						scope.Functions = strings.Split(function, ",")
 					}
 
-					return cmdGenerate.Call(connection, schema, scope)
+					return cmdGenerate.CallContext(ctx, connection, schema, scope)
 				},
 			},
 			{

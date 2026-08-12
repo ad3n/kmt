@@ -56,6 +56,10 @@ func NewGenerate(config *config.Migration, connection *sql.DB) *generate {
 }
 
 func (g *generate) Call(connection string, schema string, scope *GenerateScope) error {
+	return g.CallContext(context.Background(), connection, schema, scope)
+}
+
+func (g *generate) CallContext(ctx context.Context, connection string, schema string, scope *GenerateScope) error {
 	cli := exec.Command(g.config.PgDump, "--version")
 	err := cli.Run()
 	if err != nil {
@@ -107,7 +111,7 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 	progress.Suffix = fmt.Sprintf(" Processing tables on schema %s...", config.SuccessColor.Sprint(schema))
 	progress.Start()
 
-	version, err = g.generateTables(connection, schema, schemaConfig, migrationFolder, version, scope)
+	version, err = g.generateTablesContext(ctx, connection, schema, schemaConfig, migrationFolder, version, scope, progress)
 	if err != nil {
 		progress.Stop()
 
@@ -292,6 +296,19 @@ func (g *generate) generateTables(
 	version int64,
 	scope *GenerateScope,
 ) (int64, error) {
+	return g.generateTablesContext(context.Background(), connection, schema, schemaConfig, folder, version, scope, nil)
+}
+
+func (g *generate) generateTablesContext(
+	parentCtx context.Context,
+	connection string,
+	schema string,
+	schemaConfig map[string][]string,
+	folder string,
+	version int64,
+	scope *GenerateScope,
+	progress *spinner.Spinner,
+) (int64, error) {
 	nWorker := min(runtime.NumCPU(), 4)
 	cTable, _ := g.getTables(nWorker, schema, scope.Tables, schemaConfig["excludes"]...)
 	tables := make([]string, 0)
@@ -305,7 +322,7 @@ func (g *generate) generateTables(
 	}
 
 	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[connection], g.connection)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
 	cMigration := make(chan *migration, nWorker)
@@ -354,7 +371,19 @@ func (g *generate) generateTables(
 	}()
 
 	var firstErr error
+	completed := 0
 	for result := range cResult {
+		completed++
+		if progress != nil {
+			progress.Suffix = fmt.Sprintf(
+				" Processing table %s (%d/%d) on schema %s...",
+				config.SuccessColor.Sprint(result.job.table),
+				completed,
+				tTable,
+				config.SuccessColor.Sprint(schema),
+			)
+		}
+
 		if result.err != nil {
 			if firstErr == nil {
 				firstErr = result.err
