@@ -286,14 +286,14 @@ func readDumpLine(reader *bufio.Reader) (string, error) {
 }
 
 func (t *Table) primaryKey(name string) string {
-	tables := strings.Split(name, ".")
-	if len(tables) != 2 {
+	schema, table, qualified := strings.Cut(name, ".")
+	if !qualified || strings.Contains(table, ".") {
 		return ""
 	}
 
 	var pk string
 
-	err := t.db.QueryRow(fmt.Sprintf(QUERY_GET_PRIMARY_KEY, tables[0], tables[1])).Scan(&pk)
+	err := t.db.QueryRow(fmt.Sprintf(QUERY_GET_PRIMARY_KEY, schema, table)).Scan(&pk)
 	if err != nil {
 		return ""
 	}

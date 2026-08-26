@@ -24,14 +24,8 @@ func (s *enum) GenerateDdlSingle(schema string, enum string) <-chan *Migration {
 			return nil, err
 		}
 
-		shortName := definition.Name
-		sName := strings.Split(definition.Name, ".")
-		if len(sName) == 2 {
-			shortName = sName[1]
-		}
-
 		return &Migration{
-			Name:       shortName,
+			Name:       enumShortName(definition.Name),
 			UpScript:   s.createDdl(definition.Name, definition.Value),
 			DownScript: fmt.Sprintf(SECURE_DROP_TYPE, definition.Name),
 		}, nil
@@ -48,14 +42,8 @@ func (s *enum) GenerateDdl(schema string) <-chan *Migration {
 			return nil, err
 		}
 
-		shortName := definition.Name
-		sName := strings.Split(definition.Name, ".")
-		if len(sName) == 2 {
-			shortName = sName[1]
-		}
-
 		return &Migration{
-			Name:       shortName,
+			Name:       enumShortName(definition.Name),
 			UpScript:   s.createDdl(definition.Name, definition.Value),
 			DownScript: fmt.Sprintf(SECURE_DROP_TYPE, definition.Name),
 		}, nil
@@ -63,14 +51,27 @@ func (s *enum) GenerateDdl(schema string) <-chan *Migration {
 }
 
 func (s *enum) createDdl(name string, values string) string {
-	ddl := fmt.Sprintf(SQL_CREATE_ENUM_OPEN, name)
-	sV := strings.SplitSeq(values, "#")
-	for s := range sV {
-		ddl = fmt.Sprintf("%s'%s',", ddl, s)
+	var ddl strings.Builder
+	ddl.Grow(len(name) + len(values) + 24)
+	fmt.Fprintf(&ddl, SQL_CREATE_ENUM_OPEN, name)
+
+	separator := ""
+	for value := range strings.SplitSeq(values, "#") {
+		ddl.WriteString(separator)
+		ddl.WriteByte('\'')
+		ddl.WriteString(value)
+		ddl.WriteByte('\'')
+		separator = ","
 	}
 
-	ddl = strings.TrimRight(ddl, ",")
-	ddl = fmt.Sprintf(SQL_CREATE_ENUM_CLOSE, ddl)
+	return fmt.Sprintf(SQL_CREATE_ENUM_CLOSE, ddl.String())
+}
 
-	return ddl
+func enumShortName(name string) string {
+	_, shortName, qualified := strings.Cut(name, ".")
+	if qualified && !strings.Contains(shortName, ".") {
+		return shortName
+	}
+
+	return name
 }

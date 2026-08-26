@@ -6,7 +6,7 @@ import (
 )
 
 func parseMigrationVersion(filename string) (int, error) {
-	f := strings.Split(filename, "_")
+	version, _, _ := strings.Cut(filename, "_")
 
-	return strconv.Atoi(f[0])
+	return strconv.Atoi(version)
 }

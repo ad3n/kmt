@@ -20,10 +20,10 @@ import (
 )
 
 func parseFlagList(value string) []string {
-	values := strings.Split(value, ",")
-	result := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, item := range values {
+	itemCount := strings.Count(value, ",") + 1
+	result := make([]string, 0, itemCount)
+	seen := make(map[string]struct{}, itemCount)
+	for item := range strings.SplitSeq(value, ",") {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue

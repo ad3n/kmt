@@ -34,9 +34,9 @@ type generate struct {
 }
 
 type migration struct {
-	index       int
 	schema      string
 	table       string
+	index       int
 	version     int64
 	includeData bool
 	schemaOnly  bool
