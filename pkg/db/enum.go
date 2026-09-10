@@ -51,9 +51,16 @@ func (s *enum) GenerateDdl(schema string) <-chan *Migration {
 }
 
 func (s *enum) createDdl(name string, values string) string {
+	openPrefix, openSuffix, _ := strings.Cut(SQL_CREATE_ENUM_OPEN, "%s")
+	closeSuffix := strings.TrimPrefix(SQL_CREATE_ENUM_CLOSE, "%s")
+	labelCount := strings.Count(values, "#") + 1
+
 	var ddl strings.Builder
-	ddl.Grow(len(name) + len(values) + 24)
-	fmt.Fprintf(&ddl, SQL_CREATE_ENUM_OPEN, name)
+
+	ddl.Grow(len(openPrefix) + len(name) + len(openSuffix) + len(values) + 2*labelCount + len(closeSuffix))
+	ddl.WriteString(openPrefix)
+	ddl.WriteString(name)
+	ddl.WriteString(openSuffix)
 
 	separator := ""
 	for value := range strings.SplitSeq(values, "#") {
@@ -64,7 +71,9 @@ func (s *enum) createDdl(name string, values string) string {
 		separator = ","
 	}
 
-	return fmt.Sprintf(SQL_CREATE_ENUM_CLOSE, ddl.String())
+	ddl.WriteString(closeSuffix)
+
+	return ddl.String()
 }
 
 func enumShortName(name string) string {
