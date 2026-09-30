@@ -19,34 +19,36 @@ import (
 	"github.com/briandowns/spinner"
 )
 
-type GenerateScope struct {
-	Tables            []string
-	Functions         []string
-	Views             []string
-	MaterializedViews []string
-	Enums             []string
-	IncludeData       bool
-}
+type (
+	GenerateScope struct {
+		Tables            []string
+		Functions         []string
+		Views             []string
+		MaterializedViews []string
+		Enums             []string
+		IncludeData       bool
+	}
 
-type generate struct {
-	connection *sql.DB
-	config     *config.Migration
-}
+	generate struct {
+		connection *sql.DB
+		config     *config.Migration
+	}
 
-type migration struct {
-	schema      string
-	table       string
-	index       int
-	version     int64
-	includeData bool
-	schemaOnly  bool
-}
+	migration struct {
+		schema      string
+		table       string
+		index       int
+		version     int64
+		includeData bool
+		schemaOnly  bool
+	}
 
-type migrationResult struct {
-	job *migration
-	ddl *db.Ddl
-	err error
-}
+	migrationResult struct {
+		job *migration
+		ddl *db.Ddl
+		err error
+	}
+)
 
 func NewGenerate(config *config.Migration, connection *sql.DB) *generate {
 	return &generate{
@@ -326,13 +328,14 @@ func (g *generate) generateTablesContext(
 	defer cancel()
 
 	cMigration := make(chan *migration, nWorker)
-	cResult := make(chan *migrationResult, nWorker)
+	cResult := make(chan migrationResult, nWorker)
 	nWorker = min(nWorker, tTable)
 
 	var workers stdsync.WaitGroup
-	workers.Add(nWorker)
 	for range nWorker {
-		go g.do(ctx, ddlTool, cMigration, cResult, &workers)
+		workers.Go(func() {
+			g.do(ctx, ddlTool, cMigration, cResult)
+		})
 	}
 
 	go func() {
@@ -340,32 +343,31 @@ func (g *generate) generateTablesContext(
 		close(cResult)
 	}()
 
-	jobs := make([]*migration, 0, tTable)
+	jobs := make([]migration, tTable)
 	withData := make(map[string]struct{}, len(schemaConfig["with_data"]))
 	for _, tableName := range schemaConfig["with_data"] {
 		withData[tableName] = struct{}{}
 	}
 
-	index := 0
-	for _, tableName := range tables {
+	for index, tableName := range tables {
 		_, configuredWithData := withData[tableName]
 		includeData := scope.IncludeData || configuredWithData
-		jobs = append(jobs, &migration{
+		jobs[index] = migration{
 			index:       index,
 			version:     version,
 			schema:      schema,
 			table:       tableName,
 			includeData: includeData,
 			schemaOnly:  !includeData,
-		})
+		}
+
 		version += 2
-		index++
 	}
 
 	fkBase, insertBase := version, version+int64(tTable)
 	go func() {
-		for _, job := range jobs {
-			cMigration <- job
+		for index := range jobs {
+			cMigration <- &jobs[index]
 		}
 
 		close(cMigration)
@@ -451,12 +453,11 @@ func (g *generate) writeInsert(folder string, ddl *db.Ddl, version int64) error 
 	return g.write(folder, version, "insert", ddl.Name, ddl.Insert.UpScript, ddl.Insert.DownScript)
 }
 
-func (g *generate) do(ctx context.Context, tableTool *db.Table, cMigration <-chan *migration, cResult chan<- *migrationResult, wg *stdsync.WaitGroup) {
-	defer wg.Done()
+func (g *generate) do(ctx context.Context, tableTool *db.Table, cMigration <-chan *migration, cResult chan<- migrationResult) {
 	for m := range cMigration {
-		ddl, err := tableTool.GenerateContext(ctx, fmt.Sprintf("%s.%s", m.schema, m.table), m.schemaOnly)
+		ddl, err := tableTool.GenerateContext(ctx, m.schema+"."+m.table, m.schemaOnly)
 
-		cResult <- &migrationResult{job: m, ddl: ddl, err: err}
+		cResult <- migrationResult{job: m, ddl: ddl, err: err}
 	}
 }
 
@@ -519,6 +520,7 @@ func writeAtomic(path, content string) error {
 
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
+
 	if err := tmp.Chmod(0644); err != nil {
 		tmp.Close()
 

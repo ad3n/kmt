@@ -283,7 +283,6 @@ func main() {
 					cmdGenerate := command.NewGenerate(cfg.Migration, db)
 					args := cmd.Args().Slice()
 					defaultScope := func() *command.GenerateScope {
-
 						return &command.GenerateScope{
 							Tables:            []string{"all"},
 							Enums:             []string{"all"},
@@ -297,7 +296,6 @@ func main() {
 					if len(args) == 1 {
 						for schema := range source.Schemas {
 							if err := cmdGenerate.CallContext(ctx, connection, schema, defaultScope()); err != nil {
-
 								return err
 							}
 						}
@@ -495,41 +493,39 @@ func main() {
 					number := 1
 					t.SetHeaders("NO", "SCHEMA", "FILE", strings.ToUpper(cmd.Args().Get(0)), strings.ToUpper(cmd.Args().Get(1)), "SYNC", "DIFF")
 					for k := range source.Schemas {
-						for l := range compare.Schemas {
-							if k != l {
-								continue
-							}
-
-							vSource, vCompare, diff := cmdCompare.Call(cmd.Args().Get(0), cmd.Args().Get(1), k)
-							if vSource == 0 {
-								return nil
-							}
-
-							files, err := os.ReadDir(filepath.Join(cfg.Migration.Folder, k))
-							if err != nil {
-								fmt.Println(err.Error())
-
-								return nil
-							}
-
-							filesLength := len(files)
-							if filesLength == 0 {
-								return nil
-							}
-
-							file := strings.Split(files[filesLength-1].Name(), "_")
-							version, _ := strconv.Atoi(file[0])
-
-							sync := uint(version) == vSource && vSource == vCompare
-							status := color.New(color.FgRed, color.Bold).Sprint("x")
-							if sync {
-								status = color.New(color.FgGreen).Sprint("v")
-							}
-
-							t.AddRow(color.New(color.Bold).Sprint(number), k, strconv.Itoa(version), strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
-
-							number++
+						if _, ok := compare.Schemas[k]; !ok {
+							continue
 						}
+
+						vSource, vCompare, diff := cmdCompare.Call(cmd.Args().Get(0), cmd.Args().Get(1), k)
+						if vSource == 0 {
+							return nil
+						}
+
+						files, err := os.ReadDir(filepath.Join(cfg.Migration.Folder, k))
+						if err != nil {
+							fmt.Println(err.Error())
+
+							return nil
+						}
+
+						filesLength := len(files)
+						if filesLength == 0 {
+							return nil
+						}
+
+						file, _, _ := strings.Cut(files[filesLength-1].Name(), "_")
+						version, _ := strconv.Atoi(file)
+
+						sync := uint(version) == vSource && vSource == vCompare
+						status := color.New(color.FgRed, color.Bold).Sprint("x")
+						if sync {
+							status = color.New(color.FgGreen).Sprint("v")
+						}
+
+						t.AddRow(color.New(color.Bold).Sprint(number), k, strconv.Itoa(version), strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
+
+						number++
 					}
 
 					t.Render()

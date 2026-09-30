@@ -257,8 +257,11 @@ func streamMigration(db *sql.DB, query string, builder func(*sql.Rows) (*Migrati
 	}
 
 	go func() {
-		defer close(ch)
-		defer rows.Close()
+		defer func(channel chan<- *Migration, rows *sql.Rows) {
+			defer close(channel)
+
+			rows.Close()
+		}(ch, rows)
 
 		for rows.Next() {
 			item, err := builder(rows)

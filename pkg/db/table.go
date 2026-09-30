@@ -12,11 +12,18 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 var (
+	dumpReaderPool = sync.Pool{
+		New: func() any {
+			return bufio.NewReaderSize(nil, 64*1024)
+		},
+	}
+
 	reReference = regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk|pkey|pk`)
 	reForeign   = regexp.MustCompile(`fkey|fk|foreign|foreign_key|foreignkey|foreignk`)
 
@@ -136,7 +143,9 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 		return nil, fmt.Errorf("start pg_dump for table %s: %w", name, err)
 	}
 
-	reader := bufio.NewReaderSize(stdout, 64*1024)
+	reader := acquireDumpReader(stdout)
+	defer releaseDumpReader(reader)
+
 	line, readErr := readDumpLine(reader)
 	var skip bool
 	var waitForSemicolon bool
@@ -274,6 +283,18 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 	}, nil
 }
 
+func acquireDumpReader(source io.Reader) *bufio.Reader {
+	reader := dumpReaderPool.Get().(*bufio.Reader)
+	reader.Reset(source)
+
+	return reader
+}
+
+func releaseDumpReader(reader *bufio.Reader) {
+	reader.Reset(nil)
+	dumpReaderPool.Put(reader)
+}
+
 func readDumpLine(reader *bufio.Reader) (string, error) {
 	line, err := reader.ReadString('\n')
 	if len(line) > 0 {
@@ -302,7 +323,14 @@ func (t *Table) primaryKey(name string) string {
 }
 
 func (Table) keyValue(line string, name string, between bool) string {
-	line = strings.TrimPrefix(line, fmt.Sprintf(SQL_INSERT_INTO_START, name))
+	start, end, _ := strings.Cut(SQL_INSERT_INTO_START, "%s")
+	afterStart, startOK := strings.CutPrefix(line, start)
+	afterName, nameOK := strings.CutPrefix(afterStart, name)
+	afterEnd, endOK := strings.CutPrefix(afterName, end)
+	if startOK && nameOK && endOK {
+		line = afterEnd
+	}
+
 	if between {
 		line = strings.TrimSuffix(line, SQL_INSERT_INTO_CLOSE)
 	}

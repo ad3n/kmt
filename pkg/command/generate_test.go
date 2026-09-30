@@ -14,47 +14,43 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
-type emptyDriver struct{}
-type emptyConn struct{}
-type emptyRows struct{}
+type (
+	emptyDriver struct{}
+
+	emptyConn struct{}
+
+	emptyRows struct{}
+)
 
 func (emptyDriver) Open(string) (driver.Conn, error) {
-
 	return emptyConn{}, nil
 }
 
 func (emptyConn) Prepare(string) (driver.Stmt, error) {
-
 	return nil, errors.New("not supported")
 }
 
 func (emptyConn) Close() error {
-
 	return nil
 }
 
 func (emptyConn) Begin() (driver.Tx, error) {
-
 	return nil, errors.New("not supported")
 }
 
 func (emptyConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
-
 	return emptyRows{}, nil
 }
 
 func (emptyRows) Columns() []string {
-
 	return []string{"key_column"}
 }
 
 func (emptyRows) Close() error {
-
 	return nil
 }
 
 func (emptyRows) Next([]driver.Value) error {
-
 	return io.EOF
 }
 

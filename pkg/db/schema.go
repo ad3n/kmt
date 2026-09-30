@@ -45,8 +45,11 @@ func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan 
 	}
 
 	go func(result *sql.Rows, channel chan<- string) {
-		defer close(cTable)
-		defer rows.Close()
+		defer func(channel chan<- string, rows *sql.Rows) {
+			defer close(channel)
+
+			rows.Close()
+		}(cTable, rows)
 
 		for result.Next() {
 			var table string
