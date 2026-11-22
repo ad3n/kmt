@@ -1,8 +1,11 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"iter"
+	"slices"
 )
 
 type (
@@ -119,7 +122,9 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n
     ON n.oid = p.pronamespace
-WHERE n.nspname = '%s';`
+WHERE n.nspname = '%s'
+    AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_aggregate a WHERE a.aggfnoid = p.oid)
+ORDER BY p.proname, p.oid;`
 
 	QUERY_FUNCTION = `
 SELECT
@@ -129,7 +134,10 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n
     ON n.oid = p.pronamespace
-WHERE n.nspname = '%s' AND p.proname = '%s';`
+WHERE n.nspname = '%s'
+    AND p.proname = '%s'
+    AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_aggregate a WHERE a.aggfnoid = p.oid)
+ORDER BY p.oid;`
 
 	QUERY_LIST_ENUM = `
 SELECT
@@ -138,23 +146,12 @@ SELECT
         ARRAY( SELECT e.enumlabel
                 FROM pg_catalog.pg_enum e
                 WHERE e.enumtypid = t.oid
-                ORDER BY e.oid ), '#'
+                ORDER BY e.enumsortorder ), '#'
         ) AS values
 FROM pg_catalog.pg_type t
 LEFT JOIN pg_catalog.pg_namespace n
     ON n.oid = t.typnamespace
-WHERE ( t.typrelid = 0
-        OR ( SELECT c.relkind = 'c'
-                FROM pg_catalog.pg_class c
-                WHERE c.oid = t.typrelid
-            )
-    )
-    AND NOT EXISTS
-        ( SELECT 1
-            FROM pg_catalog.pg_type el
-            WHERE el.oid = t.typelem
-                AND el.typarray = t.oid
-        )
+WHERE t.typtype = 'e'
     AND n.nspname <> 'pg_catalog'
     AND n.nspname <> 'information_schema'
     AND n.nspname = '%s'
@@ -167,23 +164,12 @@ SELECT
         ARRAY( SELECT e.enumlabel
                 FROM pg_catalog.pg_enum e
                 WHERE e.enumtypid = t.oid
-                ORDER BY e.oid ), '#'
+                ORDER BY e.enumsortorder ), '#'
         ) AS values
 FROM pg_catalog.pg_type t
 LEFT JOIN pg_catalog.pg_namespace n
     ON n.oid = t.typnamespace
-WHERE ( t.typrelid = 0
-        OR ( SELECT c.relkind = 'c'
-                FROM pg_catalog.pg_class c
-                WHERE c.oid = t.typrelid
-            )
-    )
-    AND NOT EXISTS
-        ( SELECT 1
-            FROM pg_catalog.pg_type el
-            WHERE el.oid = t.typelem
-                AND el.typarray = t.oid
-        )
+WHERE t.typtype = 'e'
     AND n.nspname <> 'pg_catalog'
     AND n.nspname <> 'information_schema'
     AND n.nspname = '%s'
@@ -247,33 +233,63 @@ WHERE table_schema = '%s'
 ORDER BY ordinal_position;`
 )
 
-func streamMigration(db *sql.DB, query string, builder func(*sql.Rows) (*Migration, error)) <-chan *Migration {
-	ch := make(chan *Migration)
-	rows, err := db.Query(query)
-	if err != nil {
-		close(ch)
-
-		return ch
+func objectMigrations(ctx context.Context, db *sql.DB, listQuery, singleQuery, schema string, names []string, scan func(*sql.Rows) (*Migration, error)) iter.Seq2[*Migration, error] {
+	if len(names) == 0 || slices.Contains(names, "all") {
+		return queryMigrations(ctx, db, fmt.Sprintf(listQuery, schema), scan)
 	}
 
-	go func() {
-		defer func(channel chan<- *Migration, rows *sql.Rows) {
-			defer close(channel)
+	return func(yield func(*Migration, error) bool) {
+		for _, name := range names {
+			for item, err := range queryMigrations(ctx, db, fmt.Sprintf(singleQuery, schema, name), scan) {
+				if !yield(item, err) || err != nil {
+					return
+				}
+			}
+		}
+	}
+}
 
-			rows.Close()
-		}(ch, rows)
+func queryMigrations(ctx context.Context, db *sql.DB, query string, scan func(*sql.Rows) (*Migration, error)) iter.Seq2[*Migration, error] {
+	return func(yield func(*Migration, error) bool) {
+		rows, err := db.QueryContext(ctx, query)
+		if err != nil {
+			yield(nil, err)
+
+			return
+		}
+		defer rows.Close()
 
 		for rows.Next() {
-			item, err := builder(rows)
-			if err != nil {
-				fmt.Println(err.Error())
-
-				continue
+			item, err := scan(rows)
+			if !yield(item, err) || err != nil {
+				return
 			}
-
-			ch <- item
 		}
-	}()
 
-	return ch
+		if err := rows.Err(); err != nil {
+			yield(nil, err)
+		}
+	}
+}
+
+func collectMigrations(migrations iter.Seq2[*Migration, error]) <-chan *Migration {
+	var items []*Migration
+	for item, err := range migrations {
+		if err != nil {
+			fmt.Println(err)
+
+			break
+		}
+
+		items = append(items, item)
+	}
+
+	result := make(chan *Migration, len(items))
+	defer close(result)
+
+	for _, item := range items {
+		result <- item
+	}
+
+	return result
 }

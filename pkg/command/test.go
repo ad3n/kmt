@@ -1,10 +1,10 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -32,11 +32,10 @@ func (t *test) Call() error {
 		return nil
 	}
 
-	progress.Suffix = " Test connections config..."
-	progress.Start()
+	progress.Stop()
 
 	for i, c := range t.config.Connections {
-		progress.Stop()
+		progress = spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 		progress.Suffix = fmt.Sprintf(" Test connection to %s...", config.SuccessColor.Sprint(i))
 		progress.Start()
 
@@ -48,20 +47,19 @@ func (t *test) Call() error {
 
 			return nil
 		}
-		defer db.Close()
 
-		_, err = db.Query("SELECT 1")
+		var one int
+		err = db.QueryRow("SELECT 1").Scan(&one)
+		err = errors.Join(err, db.Close())
+		progress.Stop()
 		if err != nil {
-			progress.Stop()
-
 			config.ErrorColor.Printf("Connection '%s' error %s \n", config.BoldColor.Sprint(i), err.Error())
 
 			return nil
 		}
 	}
 
-	progress.Stop()
-
+	progress = spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = fmt.Sprintf(" Test '%s' command...", config.SuccessColor.Sprint("pg_dump"))
 	progress.Start()
 
@@ -87,11 +85,12 @@ func (t *test) testFolder() error {
 		return err
 	}
 
-	testFile := filepath.Join(t.config.Folder, ".kmt")
-
-	if err := os.WriteFile(testFile, []byte("ok"), 0644); err != nil {
+	testFile, err := os.CreateTemp(t.config.Folder, ".kmt-test-*")
+	if err != nil {
 		return err
 	}
 
-	return os.Remove(testFile)
+	_, writeErr := testFile.WriteString("ok")
+
+	return errors.Join(writeErr, testFile.Close(), os.Remove(testFile.Name()))
 }

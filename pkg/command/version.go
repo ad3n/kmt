@@ -1,95 +1,69 @@
 package command
 
 import (
-	"os"
+	"database/sql"
+	"fmt"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
-type version struct {
-	config *config.Migration
-}
+type (
+	version struct {
+		config  *config.Migration
+		connect func(*config.Connection) (*sql.DB, error)
+	}
 
-func NewVersion(config *config.Migration) *version {
-	return &version{config: config}
+	MigrationVersion struct {
+		Database uint
+		Latest   uint
+		Diff     int
+		InSync   bool
+	}
+)
+
+func NewVersion(cfg *config.Migration) *version {
+	return &version{config: cfg, connect: config.NewConnection}
 }
 
 func (v *version) Call(source string, schema string) (uint, uint, int) {
-	dbConfig, ok := v.config.Connections[source]
-	if !ok {
-		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
-
-		return 0, 0, 0
-	}
-
-	_, ok = dbConfig.Schemas[schema]
-	if !ok {
-		config.ErrorColor.Printf("Schema '%s' not found\n", config.BoldColor.Sprint(schema))
-
-		return 0, 0, 0
-	}
-
-	db, err := config.NewConnection(dbConfig)
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return 0, 0, 0
-	}
-	defer db.Close()
-
-	migrationFolder := filepath.Join(v.config.Folder, schema)
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
-	defer migrator.Close()
-
-	version, _, err := migrator.Version()
+	report, err := v.Report(source, schema)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return 0, 0, 0
 	}
 
-	files, err := os.ReadDir(migrationFolder)
+	return report.Database, report.Latest, report.Diff
+}
+
+func (v *version) Report(source, schema string) (MigrationVersion, error) {
+	connection := v.config.Connections[source]
+	if connection == nil {
+		return MigrationVersion{}, fmt.Errorf("database connection %q not found", source)
+	}
+
+	if _, ok := connection.Schemas[schema]; !ok {
+		return MigrationVersion{}, fmt.Errorf("schema %q not found", schema)
+	}
+
+	folder := filepath.Join(v.config.Folder, schema)
+	versions, err := completeMigrationVersions(folder)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return 0, 0, 0
+		return MigrationVersion{}, err
 	}
 
-	filesLength := len(files)
-	if filesLength == 0 {
-		return 0, 0, 0
-	}
-
-	vFile, err := parseMigrationVersion(files[filesLength-1].Name())
+	current, err := readDatabaseMigrationVersion(v.connect, connection, schema, folder)
 	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return 0, 0, 0
+		return MigrationVersion{}, err
 	}
 
-	valid := false
-	number := 0
-	for i, file := range files {
-		if i%2 == 0 {
-			continue
-		}
+	latest := latestMigrationVersion(versions)
 
-		s, _ := parseMigrationVersion(file.Name())
-		if !valid && (version == uint(s) || vFile == s) {
-			valid = true
-
-			continue
-		}
-
-		if valid {
-			number++
-		}
-	}
-
-	if version < uint(vFile) {
-		number = number * -1
-	}
-
-	return version, uint(vFile), number
+	return MigrationVersion{
+		Database: uint(max(current, 0)),
+		Latest:   uint(max(latest, 0)),
+		Diff:     migrationDifference(versions, latest, current),
+		InSync:   current == latest,
+	}, nil
 }

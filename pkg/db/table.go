@@ -2,9 +2,9 @@ package db
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
@@ -40,6 +41,10 @@ type (
 		db      *sql.DB
 		config  *config.Connection
 		command string
+	}
+
+	dumpErrorOutput struct {
+		text strings.Builder
 	}
 
 	Ddl struct {
@@ -114,14 +119,22 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 		options = append(options, "--schema-only")
 	}
 
-	cli := exec.CommandContext(ctx, t.command, options...)
+	var primaryKey string
+	if !schemaOnly {
+		var err error
+		primaryKey, err = t.primaryKey(ctx, name)
+		if err != nil {
+			return nil, fmt.Errorf("read primary key for table %s: %w", name, err)
+		}
 
-	cli.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", t.config.Password))
-
-	primaryKey := t.primaryKey(name)
-	if primaryKey == name {
-		primaryKey = ""
+		if primaryKey == name {
+			primaryKey = ""
+		}
 	}
+
+	cli := exec.CommandContext(ctx, t.command, options...)
+	cli.WaitDelay = time.Second
+	cli.Env = append(os.Environ(), "PGPASSWORD="+t.config.Password)
 
 	stdout, err := cli.StdoutPipe()
 	if err != nil {
@@ -137,24 +150,63 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 	var insertScript strings.Builder
 	var deleteScript strings.Builder
 
-	var stderr bytes.Buffer
+	var stderr dumpErrorOutput
 	cli.Stderr = &stderr
 	if err := cli.Start(); err != nil {
-		return nil, fmt.Errorf("start pg_dump for table %s: %w", name, err)
+		return nil, fmt.Errorf("start pg_dump for table %s: %w", name, errors.Join(ctx.Err(), err))
 	}
+
+	stopClosing := context.AfterFunc(ctx, func() {
+		_ = stdout.Close()
+	})
+	defer stopClosing()
 
 	reader := acquireDumpReader(stdout)
 	defer releaseDumpReader(reader)
 
 	line, readErr := readDumpLine(reader)
 	var skip bool
-	var waitForSemicolon bool
+	var inInsert bool
+	var quote byte
+	var escapes bool
 	for readErr == nil {
 		nextLine, nextErr := readDumpLine(reader)
-		var insertContinuation bool
+		if inInsert {
+			insertScript.WriteByte('\n')
+			insertScript.WriteString(line)
+			quote, escapes = insertQuoteState(line, quote, escapes)
+			inInsert = quote != 0 || !strings.HasSuffix(strings.TrimSpace(line), ");")
+			if !inInsert {
+				insertScript.WriteByte('\n')
+			}
+
+			goto next
+		}
 
 		if t.skip(line) || skip {
 			skip = false
+
+			goto next
+		}
+
+		if t.insertScript(line) {
+			quote, escapes = insertQuoteState(line, 0, false)
+			inInsert = quote != 0 || !strings.HasSuffix(strings.TrimSpace(line), ");")
+
+			insertScript.WriteString(line)
+			if primaryKey != "" {
+				deleteScript.WriteString("DELETE FROM ")
+				deleteScript.WriteString(name)
+				deleteScript.WriteString(" WHERE ")
+				deleteScript.WriteString(primaryKey)
+				deleteScript.WriteString(" = ")
+				deleteScript.WriteString(t.keyValue(line, name, !inInsert))
+				deleteScript.WriteString(";\n")
+			}
+
+			if !inInsert {
+				insertScript.WriteString("\n")
+			}
 
 			goto next
 		}
@@ -202,47 +254,6 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 			goto next
 		}
 
-		insertContinuation = waitForSemicolon
-		if waitForSemicolon {
-			insertScript.WriteString("\n")
-			insertScript.WriteString(line)
-
-			if !t.waitForSemicolon(line) {
-				waitForSemicolon = false
-			}
-
-			if !waitForSemicolon {
-				insertScript.WriteString("\n")
-			}
-		}
-
-		if insertContinuation {
-			goto next
-		}
-
-		if t.insertScript(line) {
-			if t.waitForSemicolon(line) {
-				waitForSemicolon = true
-			}
-
-			insertScript.WriteString(line)
-			if primaryKey != "" {
-				deleteScript.WriteString("DELETE FROM ")
-				deleteScript.WriteString(name)
-				deleteScript.WriteString(" WHERE ")
-				deleteScript.WriteString(primaryKey)
-				deleteScript.WriteString(" = ")
-				deleteScript.WriteString(t.keyValue(line, name, !waitForSemicolon))
-				deleteScript.WriteString(";\n")
-			}
-
-			if !waitForSemicolon {
-				insertScript.WriteString("\n")
-			}
-
-			goto next
-		}
-
 		upScript.WriteString(line)
 		upScript.WriteString("\n")
 
@@ -252,14 +263,26 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 	}
 
 	if readErr != io.EOF {
-		cli.Process.Kill()
-		cli.Wait()
+		killErr := cli.Process.Kill()
+		if errors.Is(killErr, os.ErrProcessDone) {
+			killErr = nil
+		}
 
-		return nil, fmt.Errorf("read pg_dump table %s: %w", name, readErr)
+		return nil, fmt.Errorf("read pg_dump table %s: %w", name, errors.Join(ctx.Err(), readErr, killErr, cli.Wait()))
 	}
 
-	if err := cli.Wait(); err != nil {
-		return nil, fmt.Errorf("pg_dump table %s: %w: %s", name, err, strings.TrimSpace(stderr.String()))
+	waitErr := cli.Wait()
+	if err := errors.Join(ctx.Err(), waitErr); err != nil {
+		message := strings.TrimSpace(stderr.text.String())
+		if t.config.Password != "" {
+			message = strings.ReplaceAll(message, t.config.Password, "[redacted]")
+		}
+
+		return nil, fmt.Errorf("pg_dump table %s: %w: %s", name, err, message)
+	}
+
+	if inInsert {
+		return nil, fmt.Errorf("pg_dump table %s: incomplete INSERT statement", name)
 	}
 
 	return &Ddl{
@@ -297,7 +320,7 @@ func releaseDumpReader(reader *bufio.Reader) {
 
 func readDumpLine(reader *bufio.Reader) (string, error) {
 	line, err := reader.ReadString('\n')
-	if len(line) > 0 {
+	if len(line) > 0 && (err == nil || err == io.EOF) {
 		line = strings.TrimSuffix(line, "\n")
 
 		return line, nil
@@ -306,20 +329,27 @@ func readDumpLine(reader *bufio.Reader) (string, error) {
 	return "", err
 }
 
-func (t *Table) primaryKey(name string) string {
+func (t *Table) primaryKey(ctx context.Context, name string) (string, error) {
 	schema, table, qualified := strings.Cut(name, ".")
 	if !qualified || strings.Contains(table, ".") {
-		return ""
+		return "", nil
 	}
 
 	var pk string
-
-	err := t.db.QueryRow(fmt.Sprintf(QUERY_GET_PRIMARY_KEY, schema, table)).Scan(&pk)
-	if err != nil {
-		return ""
+	err := t.db.QueryRowContext(ctx, fmt.Sprintf(QUERY_GET_PRIMARY_KEY, schema, table)).Scan(&pk)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
 	}
 
-	return pk
+	return pk, err
+}
+
+func (w *dumpErrorOutput) Write(p []byte) (int, error) {
+	const limit = 32 * 1024
+	n := min(len(p), limit-w.text.Len())
+	w.text.Write(p[:n])
+
+	return len(p), nil
 }
 
 func (Table) keyValue(line string, name string, between bool) string {
@@ -387,9 +417,40 @@ func (Table) referenceScript(line, nextLine string) bool {
 }
 
 func (Table) insertScript(line string) bool {
-	return strings.Contains(line, INSERT_INTO)
+	return strings.HasPrefix(line, INSERT_INTO)
 }
 
-func (Table) waitForSemicolon(line string) bool {
-	return !strings.HasSuffix(line, ");")
+func insertQuoteState(line string, quote byte, escapes bool) (byte, bool) {
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		if quote == 0 {
+			if c == '\'' || c == '"' {
+				quote = c
+				escapes = c == '\'' && i > 0 && (line[i-1] == 'E' || line[i-1] == 'e') &&
+					(i == 1 || strings.ContainsRune(" (,\t", rune(line[i-2])))
+			}
+
+			continue
+		}
+
+		if escapes && c == '\\' {
+			i++
+
+			continue
+		}
+
+		if c != quote {
+			continue
+		}
+
+		if i+1 < len(line) && line[i+1] == quote {
+			i++
+
+			continue
+		}
+
+		quote, escapes = 0, false
+	}
+
+	return quote, escapes
 }

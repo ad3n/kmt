@@ -3,63 +3,56 @@ package command
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type create struct {
-	config *config.Migration
+	config  *config.Migration
+	publish func(migrationPair, string) error
 }
 
-func NewCreate(config *config.Migration) *create {
-	return &create{config: config}
+func NewCreate(cfg *config.Migration) *create {
+	return &create{config: cfg, publish: migrationPair.publish}
 }
 
-func (c *create) Call(schema string, name string) error {
-	valid := false
-	for _, c := range c.config.Connections {
-		for s := range c.Schemas {
-			if s == schema {
-				valid = true
+func (c *create) Call(schema, name string) error {
+	found := false
+	for _, connection := range c.config.Connections {
+		if _, ok := connection.Schemas[schema]; ok {
+			found = true
 
-				break
-			}
-		}
-
-		if valid {
 			break
 		}
 	}
 
-	if !valid {
+	if !found {
 		config.ErrorColor.Printf("Schema '%s' not found in all connections\n", config.BoldColor.Sprint(schema))
 
 		return nil
 	}
 
-	version := time.Now().Unix()
-	migrationFolder := filepath.Join(c.config.Folder, schema)
-
-	os.MkdirAll(migrationFolder, 0777)
-
-	name = fmt.Sprintf("%d_%s", version, name)
-	_, err := os.Create(filepath.Join(migrationFolder, name+".up.sql"))
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return nil
+	if !validMigrationComponent(name) {
+		return fmt.Errorf("invalid migration name %q", name)
 	}
 
-	_, err = os.Create(filepath.Join(migrationFolder, name+".down.sql"))
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
+	var base string
+	err := withMigrationWriteLock(c.config.Folder, schema, func(folder *os.Root) error {
+		version, err := nextVersion(folder.FS(), time.Now().Unix())
+		if err != nil {
+			return err
+		}
 
-		return nil
+		base = fmt.Sprintf("%d_%s", version, name)
+
+		return writeMigrationPair(folder, base, "", "", c.publish)
+	})
+	if err != nil {
+		return err
 	}
 
-	config.SuccessColor.Printf("Migration created as %s\n", config.BoldColor.Sprint(name))
+	config.SuccessColor.Printf("Migration created as %s\n", config.BoldColor.Sprint(base))
 
-	return err
+	return nil
 }

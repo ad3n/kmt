@@ -1,7 +1,6 @@
 package command
 
 import (
-	"os"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
@@ -23,7 +22,7 @@ func (m *migrate) Call(source string, schema string, version int) error {
 	}
 
 	migrationFolder := filepath.Join(m.config.Folder, schema)
-	files, err := os.ReadDir(migrationFolder)
+	files, err := config.ReadMigrationFiles(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
@@ -32,8 +31,8 @@ func (m *migrate) Call(source string, schema string, version int) error {
 
 	valid := false
 	for _, file := range files {
-		s, _ := parseMigrationVersion(file.Name())
-		if version == s {
+		fileVersion, err := parseMigrationVersion(file.Name())
+		if err == nil && version == fileVersion {
 			valid = true
 
 			break

@@ -1,15 +1,14 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
 
-type (
-	schema struct {
-		db *sql.DB
-	}
-)
+type schema struct {
+	db *sql.DB
+}
 
 func NewSchema(db *sql.DB) *schema {
 	return &schema{db: db}
@@ -28,50 +27,47 @@ func (s *schema) CountTable(name string, nExcludes int) int {
 	return total - nExcludes
 }
 
-func (s *schema) ListTable(nWorker int, name string, excludes ...string) <-chan string {
-	cTable := make(chan string, nWorker)
-	rows, err := s.db.Query(fmt.Sprintf(QUERY_LIST_TABLE, name))
+func (s *schema) ListTable(_ int, name string, excludes ...string) <-chan string {
+	tables, err := s.Tables(context.Background(), name, excludes...)
 	if err != nil {
-		fmt.Println(err.Error())
-
-		close(cTable)
-
-		return cTable
+		fmt.Println(err)
 	}
 
-	excludeMap := make(map[string]struct{}, len(excludes))
-	for _, e := range excludes {
-		excludeMap[e] = struct{}{}
+	result := make(chan string, len(tables))
+	defer close(result)
+
+	for _, table := range tables {
+		result <- table
 	}
 
-	go func(result *sql.Rows, channel chan<- string) {
-		defer func(channel chan<- string, rows *sql.Rows) {
-			defer close(channel)
+	return result
+}
 
-			rows.Close()
-		}(cTable, rows)
+func (s *schema) Tables(ctx context.Context, name string, excludes ...string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(QUERY_LIST_TABLE, name))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-		for result.Next() {
-			var table string
+	excluded := make(map[string]struct{}, len(excludes))
+	for _, table := range excludes {
+		excluded[table] = struct{}{}
+	}
 
-			err = result.Scan(&table)
-			if err != nil {
-				fmt.Println(err.Error())
-
-				continue
-			}
-
-			if _, skip := excludeMap[table]; skip {
-				continue
-			}
-
-			cTable <- table
+	var tables []string
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			return nil, err
 		}
 
-		if err := rows.Err(); err != nil {
-			fmt.Println(err.Error())
+		if _, skip := excluded[table]; skip {
+			continue
 		}
-	}(rows, cTable)
 
-	return cTable
+		tables = append(tables, table)
+	}
+
+	return tables, rows.Err()
 }

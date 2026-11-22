@@ -6,7 +6,7 @@ Manage postgresql cluster migration easly
 
 - Postgresql 9.5 or above
 
-- Go 1.25 or above
+- Go 1.27.4 or above
 
 - `pg_dump` (optional) to support reverse migration
 

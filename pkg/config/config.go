@@ -1,23 +1,29 @@
 package config
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 
 	"github.com/goccy/go-yaml"
 
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type (
+	migrationDatabase struct {
+		database.Driver
+		db *sql.DB
+	}
+
 	Config struct {
 		Migration *Migration `yaml:"migration"`
 	}
@@ -41,6 +47,10 @@ type (
 )
 
 func NewConnection(database *Connection) (*sql.DB, error) {
+	if database == nil {
+		return nil, errors.New("database connection configuration is missing")
+	}
+
 	options := strings.Builder{}
 	for k, v := range database.Options {
 		options.WriteString(k)
@@ -49,69 +59,94 @@ func NewConnection(database *Connection) (*sql.DB, error) {
 		options.WriteString(" ")
 	}
 
-	return sql.Open("pgx", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, strings.TrimRight(options.String(), " ")))
+	db, err := sql.Open("pgx", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s %s", database.Host, database.Port, database.User, database.Password, database.Name, strings.TrimRight(options.String(), " ")))
+	if err != nil {
+		return nil, errors.New("invalid PostgreSQL connection configuration")
+	}
+
+	return db, nil
 }
 
 func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migrate {
-	driver, err := postgres.WithInstance(db, &postgres.Config{SchemaName: schema})
+	migrator, err := OpenMigrator(db, database, schema, path)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal(err)
 	}
 
-	wd, err := os.Getwd()
+	return migrator
+}
+
+func OpenMigrator(db *sql.DB, database, schema, path string) (*migrate.Migrate, error) {
+	source, err := openMigrationSource(path)
 	if err != nil {
-		log.Fatalln(err.Error())
+		return nil, err
 	}
 
-	migrate, err := migrate.NewWithDatabaseInstance(fmt.Sprintf("file://%s", filepath.Join(wd, path)), database, driver)
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
 	if err != nil {
-		log.Fatalln(err.Error())
+		return nil, errors.Join(err, source.Close())
 	}
 
-	return migrate
+	driver, err := postgres.WithConnection(ctx, conn, &postgres.Config{SchemaName: schema})
+	if err != nil {
+		return nil, errors.Join(err, conn.Close(), source.Close())
+	}
+
+	migrator, err := migrate.NewWithInstance("iofs", source, database, migrationDatabase{Driver: driver, db: db})
+	if err != nil {
+		return nil, errors.Join(err, driver.Close(), source.Close())
+	}
+
+	return migrator, nil
+}
+
+func (m migrationDatabase) Close() error {
+	return errors.Join(m.Driver.Close(), m.db.Close())
 }
 
 func Parse(path string) *Config {
-	config := Config{}
+	cfg := Config{}
 	c, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatalf("Kmtfile.yml not found")
 	}
 
-	err = yaml.Unmarshal(c, &config)
+	err = yaml.Unmarshal(c, &cfg)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Fatal("invalid migration YAML configuration")
 	}
 
-	if config.Migration.PgDump == "" {
-		config.Migration.PgDump = "pg_dump"
+	if cfg.Migration == nil {
+		log.Fatal("migration configuration is missing")
 	}
 
-	if config.Migration.Folder == "" {
-		config.Migration.Folder = "migrations"
+	if cfg.Migration.PgDump == "" {
+		cfg.Migration.PgDump = "pg_dump"
 	}
 
-	for k, cs := range config.Migration.Connections {
-		for x, v := range cs.Schemas {
-			if v == nil {
-				v = map[string][]string{}
+	if cfg.Migration.Folder == "" {
+		cfg.Migration.Folder = "migrations"
+	}
+
+	for name, connection := range cfg.Migration.Connections {
+		if connection == nil {
+			log.Fatalf("database connection %q has no configuration", name)
+		}
+
+		for schema, options := range connection.Schemas {
+			if options == nil {
+				options = make(map[string][]string)
 			}
 
-			_, ok := v["excludes"]
-			if !ok {
-				v["excludes"] = []string{}
+			options["excludes"] = append(options["excludes"], "schema_migrations")
+			if _, ok := options["with_data"]; !ok {
+				options["with_data"] = []string{}
 			}
 
-			v["excludes"] = append(v["excludes"], "schema_migrations")
-
-			_, ok = v["with_data"]
-			if !ok {
-				v["with_data"] = []string{}
-			}
-
-			config.Migration.Connections[k].Schemas[x] = v
+			connection.Schemas[schema] = options
 		}
 	}
 
-	return &config
+	return &cfg
 }

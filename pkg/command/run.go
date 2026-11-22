@@ -1,25 +1,26 @@
 package command
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
-	"github.com/briandowns/spinner"
+	gomigrate "github.com/golang-migrate/migrate/v4"
 )
 
 type run struct {
-	config *config.Migration
+	config  *config.Migration
+	connect func(*config.Connection) (*sql.DB, error)
 }
 
-func NewRun(config *config.Migration) *run {
-	return &run{config: config}
+func NewRun(cfg *config.Migration) *run {
+	return &run{config: cfg, connect: config.NewConnection}
 }
 
-func (r *run) Call(source string, schema string, step int) error {
+func (r *run) Call(source string, schema string, step int) (err error) {
 	if step <= 0 {
 		config.ErrorColor.Println("Invalid step")
 
@@ -40,65 +41,58 @@ func (r *run) Call(source string, schema string, step int) error {
 		return nil
 	}
 
-	db, err := config.NewConnection(dbConfig)
+	db, err := r.connect(dbConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
-	defer db.Close()
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
 
 	migrationFolder := filepath.Join(r.config.Folder, schema)
-	files, err := os.ReadDir(migrationFolder)
+	versions, err := completeMigrationVersions(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
-	version, _, _ := migrator.Version()
-	valid := false
-	migrations := make([]string, 0, len(files)/2)
-	number := 0
-	for i, file := range files {
-		if i%2 == 0 {
-			continue
-		}
+	migrator, err := config.OpenMigrator(db, dbConfig.Name, schema, migrationFolder)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sourceErr, databaseErr := migrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
 
-		s, _ := parseMigrationVersion(file.Name())
-		if !valid && version == uint(s) {
-			valid = true
+	version, _, err := migrator.Version()
+	unversioned := errors.Is(err, gomigrate.ErrNilVersion)
+	if err != nil && !unversioned {
+		return err
+	}
 
-			continue
-		}
+	if _, ok := versions[version]; !unversioned && !ok {
+		return fmt.Errorf("current migration version %d has no complete pair", version)
+	}
 
-		if valid && number < step {
-			migrations = append(migrations, strconv.Itoa(s))
-
-			number++
+	available := 0
+	for candidate := range versions {
+		if unversioned || candidate > version {
+			available++
 		}
 	}
 
-	if len(migrations) == 0 {
+	if available == 0 {
 		config.SuccessColor.Printf("Database %s schema %s is up to date\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
 
 		return nil
 	}
 
-	for _, v := range migrations {
-		progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-		progress.Suffix = fmt.Sprintf(" Run migration file %s on schema %s", config.SuccessColor.Sprint(v), config.BoldColor.Sprint(schema))
-
-		err = migrator.Steps(1)
-		if err != nil {
-			progress.Stop()
-			config.ErrorColor.Printf("Error when running %s with message %s\n", config.SuccessColor.Sprint(v), config.BoldColor.Sprint(err.Error()))
-
-			return nil
-		}
-
-		progress.Stop()
+	if err := migrator.Steps(min(step, available)); err != nil {
+		return err
 	}
 
 	config.SuccessColor.Printf("Migration on %s schema %s run successfully\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))

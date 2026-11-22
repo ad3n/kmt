@@ -3,14 +3,16 @@ package command
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"iter"
+	"math"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
-	"strconv"
-	"strings"
+	"slices"
 	stdsync "sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
@@ -35,12 +37,10 @@ type (
 	}
 
 	migration struct {
-		schema      string
 		table       string
 		index       int
 		version     int64
 		includeData bool
-		schemaOnly  bool
 	}
 
 	migrationResult struct {
@@ -62,232 +62,129 @@ func (g *generate) Call(connection string, schema string, scope *GenerateScope) 
 }
 
 func (g *generate) CallContext(ctx context.Context, connection string, schema string, scope *GenerateScope) error {
-	cli := exec.Command(g.config.PgDump, "--version")
-	err := cli.Run()
-	if err != nil {
-		config.ErrorColor.Printf("PG Dump not found in %s\n", config.BoldColor.Sprint(g.config.PgDump))
-
-		return nil
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
-	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-
-	source, ok := g.config.Connections[connection]
-	if !ok {
-		config.ErrorColor.Printf("Config for '%s' not found\n", connection)
-
-		return nil
+	source := g.config.Connections[connection]
+	if source == nil {
+		return fmt.Errorf("config for %q not found", connection)
 	}
 
 	schemaConfig, ok := source.Schemas[schema]
 	if !ok {
-		config.ErrorColor.Printf("Schema '%s' not found\n", schema)
-
-		return nil
+		return fmt.Errorf("schema %q not found", schema)
 	}
 
-	migrationFolder := filepath.Join(g.config.Folder, schema)
-	if err := os.MkdirAll(migrationFolder, 0755); err != nil {
-		return fmt.Errorf("create migration folder %s: %w", migrationFolder, err)
+	if !validMigrationComponent(schema) {
+		return fmt.Errorf("invalid migration schema %q", schema)
 	}
 
-	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing enums on schema %s...", config.SuccessColor.Sprint(schema))
-	progress.Start()
+	cli := exec.CommandContext(ctx, g.config.PgDump, "--version")
+	if err := cli.Run(); err != nil {
+		return fmt.Errorf("check pg_dump: %w", errors.Join(ctx.Err(), err))
+	}
 
-	version, err := nextMigrationVersion(migrationFolder, time.Now().Unix())
+	err := withMigrationWriteLock(g.config.Folder, schema, func(folder *os.Root) error {
+		return g.generateSchema(ctx, connection, schema, schemaConfig, folder, scope)
+	})
 	if err != nil {
-		progress.Stop()
-
 		return err
 	}
-
-	version, err = g.generateEnums(schema, migrationFolder, version, scope.Enums...)
-	if err != nil {
-		progress.Stop()
-
-		return err
-	}
-
-	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing tables on schema %s...", config.SuccessColor.Sprint(schema))
-	progress.Start()
-
-	version, err = g.generateTablesContext(ctx, connection, schema, schemaConfig, migrationFolder, version, scope, progress)
-	if err != nil {
-		progress.Stop()
-
-		return err
-	}
-
-	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing functions on schema %s...", config.SuccessColor.Sprint(schema))
-	progress.Start()
-
-	version, err = g.generateFunctions(schema, migrationFolder, version, scope.Functions...)
-	if err != nil {
-		progress.Stop()
-
-		return err
-	}
-
-	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing views on schema %s...", config.SuccessColor.Sprint(schema))
-	progress.Start()
-
-	version, err = g.generateViews(schema, migrationFolder, version, scope.Views...)
-	if err != nil {
-		progress.Stop()
-
-		return err
-	}
-
-	progress.Stop()
-	progress.Suffix = fmt.Sprintf(" Processing materialized views on schema %s...", config.SuccessColor.Sprint(schema))
-	progress.Start()
-
-	_, err = g.generateMaterializedViews(schema, migrationFolder, version, scope.MaterializedViews...)
-	if err != nil {
-		progress.Stop()
-
-		return err
-	}
-
-	progress.Stop()
 
 	config.SuccessColor.Printf("Migration generation on schema %s run successfully\n", config.BoldColor.Sprint(schema))
 
 	return nil
 }
 
-func (g *generate) generateEnums(schema string, folder string, version int64, enums ...string) (int64, error) {
-	if len(enums) > 0 && enums[0] == "all" {
-		for ddl := range db.NewEnum(g.connection).GenerateDdl(schema) {
-			if err := g.write(folder, version, "enum", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
-		}
-
-		return version, nil
-	}
-
-	for _, enum := range enums {
-		udts := db.NewEnum(g.connection).GenerateDdlSingle(schema, enum)
-		for ddl := range udts {
-			if err := g.write(folder, version, "enum", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
+func (g *generate) generateSchema(ctx context.Context, connection, schema string, schemaConfig map[string][]string, folder *os.Root, scope *GenerateScope) error {
+	if scope == nil || len(scope.Tables)+len(scope.Enums)+len(scope.Functions)+len(scope.Views)+len(scope.MaterializedViews) == 0 {
+		includeData := scope != nil && scope.IncludeData
+		scope = &GenerateScope{
+			Tables:            []string{"all"},
+			Enums:             []string{"all"},
+			Functions:         []string{"all"},
+			Views:             []string{"all"},
+			MaterializedViews: []string{"all"},
+			IncludeData:       includeData,
 		}
 	}
 
-	return version, nil
+	version, err := nextVersion(folder.FS(), time.Now().Unix())
+	if err != nil {
+		return err
+	}
+
+	stages := []struct {
+		name   string
+		filter []string
+		read   func(context.Context, string, ...string) iter.Seq2[*db.Migration, error]
+	}{
+		{name: "enum", filter: scope.Enums, read: db.NewEnum(g.connection).Migrations},
+		{name: "table", filter: scope.Tables},
+		{name: "function", filter: scope.Functions, read: db.NewFunction(g.connection).Migrations},
+		{name: "view", filter: scope.Views, read: db.NewView(g.connection).Migrations},
+		{name: "materialized_view", filter: scope.MaterializedViews, read: db.NewMaterializedView(g.connection).Migrations},
+	}
+
+	for _, stage := range stages {
+		if len(stage.filter) == 0 {
+			continue
+		}
+
+		var suffix atomic.Value
+		suffix.Store(fmt.Sprintf(" Processing %s on schema %s...", stage.name, config.SuccessColor.Sprint(schema)))
+		progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+		progress.PreUpdate = func(s *spinner.Spinner) {
+			s.Suffix = suffix.Load().(string)
+		}
+		progress.Start()
+
+		if stage.name == "table" {
+			version, err = g.generateTablesInRoot(ctx, connection, schema, schemaConfig, folder, version, scope, func(message string) {
+				suffix.Store(message)
+			})
+			progress.Stop()
+
+			if err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		version, err = g.writeObjects(ctx, folder, version, stage.name, stage.read(ctx, schema, stage.filter...))
+		progress.Stop()
+		if err != nil {
+			return err
+		}
+	}
+
+	return ctx.Err()
 }
 
-func (g *generate) generateFunctions(schema, folder string, version int64, functions ...string) (int64, error) {
-	if len(functions) > 0 && functions[0] == "all" {
-		funcs := db.NewFunction(g.connection).GenerateDdl(schema)
-		for ddl := range funcs {
-			if err := g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
+func (g *generate) writeObjects(ctx context.Context, folder *os.Root, version int64, objectType string, objects iter.Seq2[*db.Migration, error]) (int64, error) {
+	for ddl, err := range objects {
+		if err != nil {
+			return version, fmt.Errorf("read %s definitions: %w", objectType, err)
 		}
 
-		return version, nil
-	}
-
-	for _, function := range functions {
-		funcs := db.NewFunction(g.connection).GenerateDdlSingle(schema, function)
-		for ddl := range funcs {
-			if err := g.write(folder, version, "function", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
-		}
-	}
-
-	return version, nil
-}
-
-func (g *generate) generateViews(schema, folder string, version int64, views ...string) (int64, error) {
-	if len(views) > 0 && views[0] == "all" {
-		lViews := db.NewView(g.connection).GenerateDdl(schema)
-		for ddl := range lViews {
-			if err := g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
+		if err := ctx.Err(); err != nil {
+			return version, err
 		}
 
-		return version, nil
-	}
-
-	for _, view := range views {
-		lViews := db.NewView(g.connection).GenerateDdlSingle(schema, view)
-		for ddl := range lViews {
-			if err := g.write(folder, version, "view", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
-		}
-	}
-
-	return version, nil
-}
-
-func (g *generate) generateMaterializedViews(schema, folder string, version int64, mViews ...string) (int64, error) {
-	if len(mViews) > 0 && mViews[0] == "all" {
-		materializedViews := db.NewMaterializedView(g.connection).GenerateDdl(schema)
-		for ddl := range materializedViews {
-			if err := g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
+		if version == math.MaxInt64 {
+			return version, fmt.Errorf("migration version exhausted")
 		}
 
-		return version, nil
-	}
-
-	for _, view := range mViews {
-		funcs := db.NewMaterializedView(g.connection).GenerateDdlSingle(schema, view)
-		for ddl := range funcs {
-			if err := g.write(folder, version, "materialized_view", ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
-				return version, err
-			}
-
-			version++
-		}
-	}
-
-	return version, nil
-}
-
-func (g *generate) getTables(worker int, schema string, table []string, excludes ...string) (<-chan string, int) {
-	if len(table) > 0 && table[0] == "all" {
-		schemaTool := db.NewSchema(g.connection)
-
-		return schemaTool.ListTable(worker, schema, excludes...), schemaTool.CountTable(schema, len(excludes))
-	}
-
-	cTable := make(chan string)
-	go func() {
-		for _, t := range table {
-			cTable <- t
+		if err := g.write(folder, version, objectType, ddl.Name, ddl.UpScript, ddl.DownScript); err != nil {
+			return version, err
 		}
 
-		close(cTable)
-	}()
+		version++
+	}
 
-	return cTable, len(table)
+	return version, ctx.Err()
 }
 
 func (g *generate) generateTables(
@@ -309,13 +206,39 @@ func (g *generate) generateTablesContext(
 	folder string,
 	version int64,
 	scope *GenerateScope,
-	progress *spinner.Spinner,
+	progress func(string),
+) (_ int64, err error) {
+	root, err := os.OpenRoot(folder)
+	if err != nil {
+		return version, err
+	}
+	defer func() {
+		err = errors.Join(err, root.Close())
+	}()
+
+	return g.generateTablesInRoot(parentCtx, connection, schema, schemaConfig, root, version, scope, progress)
+}
+
+func (g *generate) generateTablesInRoot(
+	parentCtx context.Context,
+	connection, schema string,
+	schemaConfig map[string][]string,
+	folder *os.Root,
+	version int64,
+	scope *GenerateScope,
+	progress func(string),
 ) (int64, error) {
-	nWorker := min(runtime.NumCPU(), 4)
-	cTable, _ := g.getTables(nWorker, schema, scope.Tables, schemaConfig["excludes"]...)
-	tables := make([]string, 0)
-	for tableName := range cTable {
-		tables = append(tables, tableName)
+	if err := parentCtx.Err(); err != nil {
+		return version, err
+	}
+
+	tables := scope.Tables
+	if slices.Contains(tables, "all") {
+		var err error
+		tables, err = db.NewSchema(g.connection).Tables(parentCtx, schema, schemaConfig["excludes"]...)
+		if err != nil {
+			return version, fmt.Errorf("list tables in schema %s: %w", schema, err)
+		}
 	}
 
 	tTable := len(tables)
@@ -323,25 +246,14 @@ func (g *generate) generateTablesContext(
 		return version, nil
 	}
 
+	if version < 0 || int64(tTable) > (math.MaxInt64-version)/4 {
+		return version, fmt.Errorf("migration version exhausted")
+	}
+
+	nWorker := min(runtime.GOMAXPROCS(0), 4, tTable)
 	ddlTool := db.NewTable(g.config.PgDump, g.config.Connections[connection], g.connection)
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
-
-	cMigration := make(chan *migration, nWorker)
-	cResult := make(chan migrationResult, nWorker)
-	nWorker = min(nWorker, tTable)
-
-	var workers stdsync.WaitGroup
-	for range nWorker {
-		workers.Go(func() {
-			g.do(ctx, ddlTool, cMigration, cResult)
-		})
-	}
-
-	go func() {
-		workers.Wait()
-		close(cResult)
-	}()
 
 	jobs := make([]migration, tTable)
 	withData := make(map[string]struct{}, len(schemaConfig["with_data"]))
@@ -355,22 +267,35 @@ func (g *generate) generateTablesContext(
 		jobs[index] = migration{
 			index:       index,
 			version:     version,
-			schema:      schema,
 			table:       tableName,
 			includeData: includeData,
-			schemaOnly:  !includeData,
 		}
 
 		version += 2
 	}
 
 	fkBase, insertBase := version, version+int64(tTable)
-	go func() {
-		for index := range jobs {
-			cMigration <- &jobs[index]
-		}
+	cResult := make(chan migrationResult, nWorker)
+	var nextJob atomic.Int64
+	var workers stdsync.WaitGroup
+	for range nWorker {
+		workers.Go(func() {
+			for ctx.Err() == nil {
+				index := int(nextJob.Add(1) - 1)
+				if index >= len(jobs) {
+					return
+				}
 
-		close(cMigration)
+				job := &jobs[index]
+				ddl, err := ddlTool.GenerateContext(ctx, schema+"."+job.table, !job.includeData)
+				cResult <- migrationResult{job: job, ddl: ddl, err: err}
+			}
+		})
+	}
+
+	go func() {
+		workers.Wait()
+		close(cResult)
 	}()
 
 	var firstErr error
@@ -378,55 +303,30 @@ func (g *generate) generateTablesContext(
 	for result := range cResult {
 		completed++
 		if progress != nil {
-			progress.Suffix = fmt.Sprintf(
+			progress(fmt.Sprintf(
 				" Processing table %s (%d/%d) on schema %s...",
 				config.SuccessColor.Sprint(result.job.table),
 				completed,
 				tTable,
 				config.SuccessColor.Sprint(schema),
-			)
+			))
 		}
 
-		if result.err != nil {
-			if firstErr == nil {
-				firstErr = result.err
-				cancel()
-			}
-
+		if firstErr != nil {
 			continue
 		}
 
-		job, ddl := result.job, result.ddl
-		if err := g.write(folder, job.version, "table", job.table, ddl.Definition.UpScript, ddl.Definition.DownScript); err != nil {
-			if firstErr == nil {
-				firstErr = err
-				cancel()
-			}
-
-			continue
+		firstErr = result.err
+		if firstErr == nil {
+			firstErr = ctx.Err()
 		}
 
-		if ddl.Reference.UpScript != "" {
-			if err := g.write(folder, job.version+1, "primary_key", job.table, ddl.Reference.UpScript, ddl.Reference.DownScript); err != nil {
-				if firstErr == nil {
-					firstErr = err
-					cancel()
-				}
-
-				continue
-			}
+		if firstErr == nil {
+			firstErr = g.writeTable(folder, result.job, result.ddl, fkBase, insertBase)
 		}
 
-		if err := g.writeForeignKey(folder, ddl, fkBase+int64(job.index)); err != nil && firstErr == nil {
-			firstErr = err
+		if firstErr != nil {
 			cancel()
-		}
-
-		if job.includeData {
-			if err := g.writeInsert(folder, ddl, insertBase+int64(job.index)); err != nil && firstErr == nil {
-				firstErr = err
-				cancel()
-			}
 		}
 	}
 
@@ -434,111 +334,28 @@ func (g *generate) generateTablesContext(
 		return version, firstErr
 	}
 
-	return insertBase + int64(tTable), nil
+	return insertBase + int64(tTable), parentCtx.Err()
 }
 
-func (g *generate) writeForeignKey(folder string, ddl *db.Ddl, version int64) error {
-	if ddl.ForeignKey.UpScript == "" {
-		return nil
-	}
-
-	return g.write(folder, version, "foreign_key", ddl.Name, ddl.ForeignKey.UpScript, ddl.ForeignKey.DownScript)
-}
-
-func (g *generate) writeInsert(folder string, ddl *db.Ddl, version int64) error {
-	if ddl.Insert.UpScript == "" {
-		return nil
-	}
-
-	return g.write(folder, version, "insert", ddl.Name, ddl.Insert.UpScript, ddl.Insert.DownScript)
-}
-
-func (g *generate) do(ctx context.Context, tableTool *db.Table, cMigration <-chan *migration, cResult chan<- migrationResult) {
-	for m := range cMigration {
-		ddl, err := tableTool.GenerateContext(ctx, m.schema+"."+m.table, m.schemaOnly)
-
-		cResult <- migrationResult{job: m, ddl: ddl, err: err}
-	}
-}
-
-func (g *generate) write(
-	folder string,
-	version int64,
-	objectType string,
-	name string,
-	upScript string,
-	downScript string,
-) error {
-	if name == "" || name != filepath.Base(name) || strings.ContainsAny(name, `/\\`) {
-		return fmt.Errorf("invalid migration name %q", name)
-	}
-
-	upPath := filepath.Join(folder, fmt.Sprintf("%d_%s_%s.up.sql", version, objectType, name))
-	downPath := filepath.Join(folder, fmt.Sprintf("%d_%s_%s.down.sql", version, objectType, name))
-	if err := writeAtomic(upPath, upScript); err != nil {
+func (g *generate) writeTable(folder *os.Root, job *migration, ddl *db.Ddl, fkBase, insertBase int64) error {
+	if err := g.write(folder, job.version, "table", job.table, ddl.Definition.UpScript, ddl.Definition.DownScript); err != nil {
 		return err
 	}
 
-	if err := writeAtomic(downPath, downScript); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func nextMigrationVersion(folder string, current int64) (int64, error) {
-	entries, err := os.ReadDir(folder)
-	if err != nil {
-		return 0, fmt.Errorf("read migration folder %s: %w", folder, err)
-	}
-
-	next := current
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		prefix, _, ok := strings.Cut(entry.Name(), "_")
-		if !ok {
-			continue
-		}
-
-		version, err := strconv.ParseInt(prefix, 10, 64)
-		if err == nil && version >= next {
-			next = version + 1
+	if ddl.Reference.UpScript != "" {
+		if err := g.write(folder, job.version+1, "primary_key", job.table, ddl.Reference.UpScript, ddl.Reference.DownScript); err != nil {
+			return err
 		}
 	}
 
-	return next, nil
-}
-
-func writeAtomic(path, content string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".kmt-*")
-	if err != nil {
-		return fmt.Errorf("create temporary migration for %s: %w", path, err)
+	if ddl.ForeignKey.UpScript != "" {
+		if err := g.write(folder, fkBase+int64(job.index), "foreign_key", ddl.Name, ddl.ForeignKey.UpScript, ddl.ForeignKey.DownScript); err != nil {
+			return err
+		}
 	}
 
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-
-	if err := tmp.Chmod(0644); err != nil {
-		tmp.Close()
-
-		return err
-	}
-
-	if _, err := tmp.WriteString(content); err != nil {
-		tmp.Close()
-
-		return fmt.Errorf("write %s: %w", path, err)
-	}
-
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close %s: %w", path, err)
-	}
-
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("commit %s: %w", path, err)
+	if job.includeData && ddl.Insert.UpScript != "" {
+		return g.write(folder, insertBase+int64(job.index), "insert", ddl.Name, ddl.Insert.UpScript, ddl.Insert.DownScript)
 	}
 
 	return nil

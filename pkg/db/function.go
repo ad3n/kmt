@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"iter"
 )
 
 type function struct {
@@ -13,38 +15,28 @@ func NewFunction(db *sql.DB) *function {
 	return &function{db: db}
 }
 
-func (s *function) GenerateDdlSingle(schema string, function string) <-chan *Migration {
-	return streamMigration(s.db, fmt.Sprintf(QUERY_FUNCTION, schema, function), func(rows *sql.Rows) (*Migration, error) {
-		definition := Definition{}
-		err := rows.Scan(&definition.Name, &definition.Value, &definition.Param)
-		if err != nil {
-			fmt.Println(err.Error())
-
-			return nil, err
-		}
-
-		return &Migration{
-			Name:       definition.Name,
-			UpScript:   fmt.Sprintf("%s;", definition.Value),
-			DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, definition.Name, definition.Param),
-		}, nil
-	})
+func (s *function) GenerateDdlSingle(schema, name string) <-chan *Migration {
+	return collectMigrations(queryMigrations(context.Background(), s.db, fmt.Sprintf(QUERY_FUNCTION, schema, name), s.scanMigration))
 }
 
 func (s *function) GenerateDdl(schema string) <-chan *Migration {
-	return streamMigration(s.db, fmt.Sprintf(QUERY_LIST_FUNCTION, schema), func(rows *sql.Rows) (*Migration, error) {
-		definition := Definition{}
-		err := rows.Scan(&definition.Name, &definition.Value, &definition.Param)
-		if err != nil {
-			fmt.Println(err.Error())
+	return collectMigrations(s.Migrations(context.Background(), schema))
+}
 
-			return nil, err
-		}
+func (s *function) Migrations(ctx context.Context, schema string, names ...string) iter.Seq2[*Migration, error] {
+	return objectMigrations(ctx, s.db, QUERY_LIST_FUNCTION, QUERY_FUNCTION, schema, names, s.scanMigration)
+}
 
-		return &Migration{
-			Name:       definition.Name,
-			UpScript:   fmt.Sprintf("%s;", definition.Value),
-			DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, definition.Name, definition.Param),
-		}, nil
-	})
+func (s *function) scanMigration(rows *sql.Rows) (*Migration, error) {
+	definition := Definition{}
+	err := rows.Scan(&definition.Name, &definition.Value, &definition.Param)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Migration{
+		Name:       definition.Name,
+		UpScript:   fmt.Sprintf("%s;", definition.Value),
+		DownScript: fmt.Sprintf(SECURE_DROP_FUNCTION, definition.Name, definition.Param),
+	}, nil
 }

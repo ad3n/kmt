@@ -8,22 +8,42 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type (
-	emptyDriver struct{}
+	emptyDriver struct {
+		query func(string) (driver.Rows, error)
+	}
 
-	emptyConn struct{}
+	emptyConn struct {
+		query func(string) (driver.Rows, error)
+	}
 
 	emptyRows struct{}
+
+	fixtureRows struct {
+		columns []string
+		values  []driver.Value
+	}
 )
 
-func (emptyDriver) Open(string) (driver.Conn, error) {
-	return emptyConn{}, nil
+func (d emptyDriver) Connect(context.Context) (driver.Conn, error) {
+	return d.Open("")
+}
+
+func (d emptyDriver) Driver() driver.Driver {
+	return d
+}
+
+func (d emptyDriver) Open(string) (driver.Conn, error) {
+	return emptyConn{query: d.query}, nil
 }
 
 func (emptyConn) Prepare(string) (driver.Stmt, error) {
@@ -38,7 +58,11 @@ func (emptyConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("not supported")
 }
 
-func (emptyConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+func (c emptyConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	if c.query != nil {
+		return c.query(query)
+	}
+
 	return emptyRows{}, nil
 }
 
@@ -54,16 +78,50 @@ func (emptyRows) Next([]driver.Value) error {
 	return io.EOF
 }
 
+func (r *fixtureRows) Columns() []string {
+	return r.columns
+}
+
+func (r *fixtureRows) Close() error {
+	return nil
+}
+
+func (r *fixtureRows) Next(values []driver.Value) error {
+	if r.values == nil {
+		return io.EOF
+	}
+
+	for index, value := range r.values {
+		values[index] = value
+	}
+
+	r.values = nil
+
+	return nil
+}
+
 func TestGenerateTablesKeepsOrderAndPerTableDataScope(t *testing.T) {
 	g, folder := newTestGenerator(t, false)
 	scope := &GenerateScope{Tables: []string{"slow", "fast"}}
+	t.Setenv("KMT_TEST_FAST_MIGRATION", filepath.Join(folder, "102_table_fast.up.sql"))
+	previous := runtime.GOMAXPROCS(2)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previous) })
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
 
-	next, err := g.generateTables("source", "public", map[string][]string{
+	var completed []string
+	next, err := g.generateTablesContext(ctx, "source", "public", map[string][]string{
 		"with_data": {"slow"},
 		"excludes":  {},
-	}, folder, 100, scope)
+	}, folder, 100, scope, func(message string) {
+		completed = append(completed, message)
+	})
 	if err != nil {
 		t.Fatalf("generate tables: %v", err)
+	}
+
+	if len(completed) != 2 || !strings.Contains(completed[0], "fast") || !strings.Contains(completed[1], "slow") {
+		t.Fatalf("expected fast table to finish first, got %v", completed)
 	}
 
 	if next != 108 {
@@ -91,7 +149,7 @@ func TestGenerateTablesKeepsOrderAndPerTableDataScope(t *testing.T) {
 	}
 
 	for _, name := range want {
-		if !contains(got, name) {
+		if !slices.Contains(got, name) {
 			t.Errorf("missing migration %s; got %v", name, got)
 		}
 	}
@@ -138,6 +196,22 @@ func TestGenerateTablesKeepsMultilineInsertOutOfTableDefinition(t *testing.T) {
 	assertFileContent(t, folder, "103_insert_public_multiline.up.sql", "INSERT INTO public.multiline VALUES (\n1\n);\n")
 }
 
+func TestGenerateTablesKeepsSQLKeywordsInsideInsertData(t *testing.T) {
+	g, folder := newTestGenerator(t, false)
+	_, err := g.generateTables("source", "public", nil, folder, 100, &GenerateScope{
+		Tables:      []string{"keywords"},
+		IncludeData: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assertFileContent(t, folder, "100_table_keywords.up.sql", "CREATE TABLE IF NOT EXISTS public.keywords (id integer);\n")
+	assertFileContent(t, folder, "100_table_keywords.down.sql", "DROP TABLE IF EXISTS public.keywords;\n")
+	assertFileContent(t, folder, "103_insert_public_keywords.up.sql",
+		"INSERT INTO public.keywords VALUES ('DROP);\n\n--some text\nSET test\nALTER TABLE ONLY a\nADD CONSTRAINT b\nend');\n")
+}
+
 func TestNextMigrationVersionAvoidsOverwrite(t *testing.T) {
 	folder := t.TempDir()
 	if err := os.WriteFile(filepath.Join(folder, "200_table_users.up.sql"), nil, 0644); err != nil {
@@ -156,12 +230,7 @@ func TestNextMigrationVersionAvoidsOverwrite(t *testing.T) {
 
 func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 	t.Helper()
-	driverName := strings.ReplaceAll(t.Name(), "/", "_")
-	sql.Register(driverName, emptyDriver{})
-	connection, err := sql.Open(driverName, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	connection := sql.OpenDB(emptyDriver{})
 
 	t.Cleanup(func() {
 		connection.Close()
@@ -182,7 +251,10 @@ func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 		"  if [ \"$arg\" = \"--schema-only\" ]; then schema_only=1; fi\n" +
 		"  prev=\"$arg\"\n" +
 		"done\n" +
-		"case \"$table\" in *slow) sleep 0.05;; esac\n" +
+		"case \"$table\" in\n" +
+		"  *slow) while [ -n \"$KMT_TEST_FAST_MIGRATION\" ] && [ ! -f \"$KMT_TEST_FAST_MIGRATION\" ]; do sleep 0.01; done;;\n" +
+		"  *cancel) : > \"$KMT_TEST_CANCEL_MARKER\"; exec sleep 10;;\n" +
+		"esac\n" +
 		"echo \"DROP TABLE IF EXISTS $table;\"\n" +
 		"echo \"CREATE TABLE $table (id integer);\"\n" +
 		"echo \"ALTER TABLE ONLY $table\"\n" +
@@ -192,6 +264,7 @@ func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 		"if [ $schema_only -eq 0 ]; then\n" +
 		"  case \"$table\" in\n" +
 		"    *multiline) printf \"INSERT INTO %s VALUES (\\n1\\n);\\n\" \"$table\";;\n" +
+		"    *keywords) printf \"INSERT INTO %s VALUES ('DROP);\\n\\n--some text\\nSET test\\nALTER TABLE ONLY a\\nADD CONSTRAINT b\\nend');\\n\" \"$table\";;\n" +
 		"    *) echo \"INSERT INTO $table VALUES (1);\";;\n" +
 		"  esac\n" +
 		"fi\n"
@@ -202,21 +275,11 @@ func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 	cfg := &config.Migration{
 		PgDump: tool,
 		Connections: map[string]*config.Connection{
-			"source": {Name: "test", User: "test", Host: "localhost", Port: 5432},
+			"source": {Name: "test", User: "test", Host: "localhost", Port: 5432, Schemas: map[string]map[string][]string{"public": nil}},
 		},
 	}
 
 	return NewGenerate(cfg, connection), t.TempDir()
-}
-
-func contains(values []string, value string) bool {
-	for _, current := range values {
-		if current == value {
-			return true
-		}
-	}
-
-	return false
 }
 
 func assertFileContent(t *testing.T, folder, name, want string) {

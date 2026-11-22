@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"os"
-	"path/filepath"
+	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -20,6 +22,10 @@ import (
 )
 
 func parseFlagList(value string) []string {
+	if value == "" {
+		return nil
+	}
+
 	itemCount := strings.Count(value, ",") + 1
 	result := make([]string, 0, itemCount)
 	seen := make(map[string]struct{}, itemCount)
@@ -280,22 +286,16 @@ func main() {
 					}
 					defer db.Close()
 
+					ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+					defer stop()
+
 					cmdGenerate := command.NewGenerate(cfg.Migration, db)
 					args := cmd.Args().Slice()
-					defaultScope := func() *command.GenerateScope {
-						return &command.GenerateScope{
-							Tables:            []string{"all"},
-							Enums:             []string{"all"},
-							Functions:         []string{"all"},
-							Views:             []string{"all"},
-							MaterializedViews: []string{"all"},
-							IncludeData:       cmd.Bool("include-data"),
-						}
-					}
-
+					includeData := cmd.Bool("include-data")
 					if len(args) == 1 {
-						for schema := range source.Schemas {
-							if err := cmdGenerate.CallContext(ctx, connection, schema, defaultScope()); err != nil {
+						scope := &command.GenerateScope{IncludeData: includeData}
+						for _, schema := range slices.Sorted(maps.Keys(source.Schemas)) {
+							if err := cmdGenerate.CallContext(ctx, connection, schema, scope); err != nil {
 								return err
 							}
 						}
@@ -304,31 +304,13 @@ func main() {
 					}
 
 					schema := args[1]
-					scope := &command.GenerateScope{}
-					scope.IncludeData = cmd.Bool("include-data")
-					if cmd.String("table") == "" && cmd.String("enum") == "" && cmd.String("view") == "" && cmd.String("mview") == "" && cmd.String("function") == "" {
-						scope = defaultScope()
-						scope.IncludeData = cmd.Bool("include-data")
-					}
-
-					if table := cmd.String("table"); table != "" {
-						scope.Tables = parseFlagList(table)
-					}
-
-					if enum := cmd.String("enum"); enum != "" {
-						scope.Enums = parseFlagList(enum)
-					}
-
-					if view := cmd.String("view"); view != "" {
-						scope.Views = parseFlagList(view)
-					}
-
-					if mview := cmd.String("mview"); mview != "" {
-						scope.MaterializedViews = parseFlagList(mview)
-					}
-
-					if function := cmd.String("function"); function != "" {
-						scope.Functions = parseFlagList(function)
+					scope := &command.GenerateScope{
+						Tables:            parseFlagList(cmd.String("table")),
+						Enums:             parseFlagList(cmd.String("enum")),
+						Functions:         parseFlagList(cmd.String("function")),
+						Views:             parseFlagList(cmd.String("view")),
+						MaterializedViews: parseFlagList(cmd.String("mview")),
+						IncludeData:       includeData,
 					}
 
 					return cmdGenerate.CallContext(ctx, connection, schema, scope)
@@ -355,18 +337,20 @@ func main() {
 					if cmd.NArg() == 2 {
 						db := cmd.Args().Get(0)
 						schema := cmd.Args().Get(1)
-						vDb, vFile, diff := cmdVersion.Call(db, schema)
-						if vDb == 0 || vFile == 0 {
+						report, err := cmdVersion.Report(db, schema)
+						if err != nil {
+							config.ErrorColor.Println(err.Error())
+
 							return nil
 						}
 
-						sync := vFile == vDb
+						sync := report.InSync
 						status := color.New(color.FgRed, color.Bold).Sprint("x")
 						if sync {
 							status = color.New(color.FgGreen).Sprint("v")
 						}
 
-						t.AddRow("1", db, schema, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
+						t.AddRow("1", db, schema, strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Database)), status, strconv.Itoa(report.Diff))
 						t.Render()
 
 						return nil
@@ -382,18 +366,20 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							vDb, vFile, diff := cmdVersion.Call(db, k)
-							if vDb == 0 || vFile == 0 {
+							report, err := cmdVersion.Report(db, k)
+							if err != nil {
+								config.ErrorColor.Println(err.Error())
+
 								return nil
 							}
 
-							sync := vFile == vDb
+							sync := report.InSync
 							status := color.New(color.FgRed, color.Bold).Sprint("x")
 							if sync {
 								status = color.New(color.FgGreen).Sprint("v")
 							}
 
-							t.AddRow(color.New(color.Bold).Sprint(number), db, k, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), db, k, strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Database)), status, strconv.Itoa(report.Diff))
 
 							number++
 						}
@@ -410,18 +396,20 @@ func main() {
 						}
 
 						for k := range source.Schemas {
-							vDb, vFile, diff := cmdVersion.Call(c, k)
-							if vDb == 0 || vFile == 0 {
+							report, err := cmdVersion.Report(c, k)
+							if err != nil {
+								config.ErrorColor.Println(err.Error())
+
 								return nil
 							}
 
-							sync := vFile == vDb
+							sync := report.InSync
 							status := color.New(color.FgRed, color.Bold).Sprint("x")
 							if sync {
 								status = color.New(color.FgGreen).Sprint("v")
 							}
 
-							t.AddRow(color.New(color.Bold).Sprint(number), c, k, strconv.Itoa(int(vFile)), strconv.Itoa(int(vDb)), status, strconv.Itoa(diff))
+							t.AddRow(color.New(color.Bold).Sprint(number), c, k, strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Database)), status, strconv.Itoa(report.Diff))
 
 							number++
 						}
@@ -473,18 +461,20 @@ func main() {
 							return fmt.Errorf("schema '%s' not found on %s", schema, cmd.Args().Get(1))
 						}
 
-						vSource, vCompare, diff := cmdCompare.Call(cmd.Args().Get(0), cmd.Args().Get(1), schema)
-						if vSource == 0 {
+						report, err := cmdCompare.Report(cmd.Args().Get(0), cmd.Args().Get(1), schema)
+						if err != nil {
+							config.ErrorColor.Println(err.Error())
+
 							return nil
 						}
 
-						sync := vSource == vCompare
+						sync := report.InSync
 						status := color.New(color.FgRed, color.Bold).Sprint("x")
 						if sync {
 							status = color.New(color.FgGreen).Sprint("v")
 						}
 
-						t.AddRow("1", schema, strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
+						t.AddRow("1", schema, strconv.Itoa(int(report.Source)), strconv.Itoa(int(report.Target)), status, strconv.Itoa(report.Diff))
 						t.Render()
 
 						return nil
@@ -497,33 +487,20 @@ func main() {
 							continue
 						}
 
-						vSource, vCompare, diff := cmdCompare.Call(cmd.Args().Get(0), cmd.Args().Get(1), k)
-						if vSource == 0 {
-							return nil
-						}
-
-						files, err := os.ReadDir(filepath.Join(cfg.Migration.Folder, k))
+						report, err := cmdCompare.Report(cmd.Args().Get(0), cmd.Args().Get(1), k)
 						if err != nil {
-							fmt.Println(err.Error())
+							config.ErrorColor.Println(err.Error())
 
 							return nil
 						}
 
-						filesLength := len(files)
-						if filesLength == 0 {
-							return nil
-						}
-
-						file, _, _ := strings.Cut(files[filesLength-1].Name(), "_")
-						version, _ := strconv.Atoi(file)
-
-						sync := uint(version) == vSource && vSource == vCompare
+						sync := report.AtLatest
 						status := color.New(color.FgRed, color.Bold).Sprint("x")
 						if sync {
 							status = color.New(color.FgGreen).Sprint("v")
 						}
 
-						t.AddRow(color.New(color.Bold).Sprint(number), k, strconv.Itoa(version), strconv.Itoa(int(vSource)), strconv.Itoa(int(vCompare)), status, strconv.Itoa(diff))
+						t.AddRow(color.New(color.Bold).Sprint(number), k, strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Source)), strconv.Itoa(int(report.Target)), status, strconv.Itoa(report.Diff))
 
 						number++
 					}

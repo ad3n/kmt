@@ -1,6 +1,7 @@
 package command
 
 import (
+	"database/sql"
 	"fmt"
 	"path/filepath"
 
@@ -11,11 +12,12 @@ import (
 )
 
 type up struct {
-	config *config.Migration
+	config  *config.Migration
+	connect func(*config.Connection) (*sql.DB, error)
 }
 
-func NewUp(config *config.Migration) *up {
-	return &up{config: config}
+func NewUp(cfg *config.Migration) *up {
+	return &up{config: cfg, connect: config.NewConnection}
 }
 
 func (u *up) Call(source string, schema string) error {
@@ -33,7 +35,7 @@ func (u *up) Call(source string, schema string) error {
 		return nil
 	}
 
-	db, err := config.NewConnection(dbConfig)
+	db, err := u.connect(dbConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
@@ -48,12 +50,14 @@ func (u *up) Call(source string, schema string) error {
 		return nil
 	}
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(u.config.Folder, schema))
+	migrationFolder := filepath.Join(u.config.Folder, schema)
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
 	defer migrator.Close()
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(source), config.SuccessColor.Sprint(schema))
 	progress.Start()
+	defer progress.Stop()
 
 	err = migrator.Up()
 	if err != nil {
@@ -74,11 +78,7 @@ func (u *up) Call(source string, schema string) error {
 	}
 
 	if version > 0 && dirty {
-		if err := migrator.Force(int(version)); err != nil {
-			return err
-		}
-
-		if err := migrator.Steps(-1); err != nil {
+		if err := rollbackDirtyMigration(migrator, migrationFolder, version); err != nil {
 			return err
 		}
 	}

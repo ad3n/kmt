@@ -1,6 +1,8 @@
 package command
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -11,11 +13,12 @@ import (
 )
 
 type down struct {
-	config *config.Migration
+	config  *config.Migration
+	connect func(*config.Connection) (*sql.DB, error)
 }
 
-func NewDown(config *config.Migration) *down {
-	return &down{config: config}
+func NewDown(cfg *config.Migration) *down {
+	return &down{config: cfg, connect: config.NewConnection}
 }
 
 func (d *down) Call(source string, schema string) error {
@@ -33,7 +36,7 @@ func (d *down) Call(source string, schema string) error {
 		return nil
 	}
 
-	db, err := config.NewConnection(dbConfig)
+	db, err := d.connect(dbConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
@@ -41,15 +44,17 @@ func (d *down) Call(source string, schema string) error {
 	}
 	defer db.Close()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(d.config.Folder, schema))
+	migrationFolder := filepath.Join(d.config.Folder, schema)
+	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
 	defer migrator.Close()
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = fmt.Sprintf(" Tear down migrations for %s on %s schema", config.SuccessColor.Sprint(source), config.SuccessColor.Sprint(schema))
 	progress.Start()
+	defer progress.Stop()
 
-	err = migrator.Down()
-	if err != nil && err == gomigrate.ErrNoChange {
+	downErr := migrator.Down()
+	if errors.Is(downErr, gomigrate.ErrNoChange) {
 		progress.Stop()
 
 		config.SuccessColor.Printf("Database %s schema %s is up to date\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
@@ -58,17 +63,17 @@ func (d *down) Call(source string, schema string) error {
 	}
 
 	version, dirty, err := migrator.Version()
-	if err != nil {
-		return err
+	if err != nil && !errors.Is(err, gomigrate.ErrNilVersion) {
+		return errors.Join(downErr, err)
+	}
+
+	if downErr != nil && (version == 0 || !dirty) {
+		return downErr
 	}
 
 	if version > 0 && dirty {
-		if err := migrator.Force(int(version)); err != nil {
-			return err
-		}
-
-		if err := migrator.Steps(-1); err != nil {
-			return err
+		if err := rollbackDirtyMigration(migrator, migrationFolder, version); err != nil {
+			return errors.Join(downErr, err)
 		}
 	}
 
@@ -76,5 +81,5 @@ func (d *down) Call(source string, schema string) error {
 
 	config.SuccessColor.Printf("Migration on %s schema %s tear down successfully\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
 
-	return err
+	return nil
 }

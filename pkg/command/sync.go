@@ -1,6 +1,8 @@
 package command
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -11,11 +13,12 @@ import (
 )
 
 type sync struct {
-	config *config.Migration
+	config  *config.Migration
+	connect func(*config.Connection) (*sql.DB, error)
 }
 
-func NewSync(config *config.Migration) *sync {
-	return &sync{config: config}
+func NewSync(cfg *config.Migration) *sync {
+	return &sync{config: cfg, connect: config.NewConnection}
 }
 
 func (s *sync) Run(source string, cluster string, schema string) error {
@@ -26,74 +29,72 @@ func (s *sync) Run(source string, cluster string, schema string) error {
 		return nil
 	}
 
-	connection := make(chan *config.Connection)
-	name := make(chan string)
-
-	go func(source string, conns []string, cConfigs map[string]*config.Connection, connection chan<- *config.Connection, name chan<- string) {
-		for _, c := range conns {
-			if source == c {
-				continue
-			}
-
-			x, ok := cConfigs[c]
-			if !ok {
-				config.ErrorColor.Printf("Connection '%s' isn't defined\n", config.BoldColor.Sprint(c))
-
-				close(connection)
-
-				break
-			}
-
-			connection <- x
-			name <- c
-		}
-
-		close(connection)
-		close(name)
-	}(source, lists, s.config.Connections, connection, name)
-
-	for source := range connection {
-		db, err := config.NewConnection(source)
-		if err != nil {
-			config.ErrorColor.Println(err.Error())
-
-			return nil
-		}
-		defer db.Close()
-
-		migrator := config.NewMigrator(db, source.Name, schema, filepath.Join(s.config.Folder, schema))
-		defer migrator.Close()
-
-		progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
-		progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(<-name), config.BoldColor.Sprint(schema))
-		progress.Start()
-
-		err = migrator.Up()
-		if err != nil && err == gomigrate.ErrNoChange {
-			progress.Stop()
-
+	for _, name := range lists {
+		if name == source {
 			continue
 		}
 
-		version, dirty, err := migrator.Version()
-		if err != nil {
-			return err
+		target := s.config.Connections[name]
+		if target == nil {
+			return fmt.Errorf("connection %q is not defined", name)
 		}
 
-		if version > 0 && dirty {
-			if err := migrator.Force(int(version)); err != nil {
-				return err
-			}
-
-			if err := migrator.Steps(-1); err != nil {
-				return err
-			}
+		if err := s.syncConnection(target, name, schema); err != nil {
+			return fmt.Errorf("sync connection %s: %w", name, err)
 		}
-
-		progress.Stop()
 	}
 
 	config.SuccessColor.Printf("Migration synced on %s schema %s\n", config.BoldColor.Sprint(cluster), config.BoldColor.Sprint(schema))
 
 	return nil
+}
+
+func (s *sync) syncConnection(target *config.Connection, name, schema string) (err error) {
+	db, err := s.connect(target)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
+
+	migrationFolder := filepath.Join(s.config.Folder, schema)
+	migrator, err := config.OpenMigrator(db, target.Name, schema, migrationFolder)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sourceErr, databaseErr := migrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
+
+	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
+	progress.Suffix = fmt.Sprintf(" Running migrations for %s on %s schema", config.SuccessColor.Sprint(name), config.BoldColor.Sprint(schema))
+	progress.Start()
+	defer progress.Stop()
+
+	upErr := migrator.Up()
+	if errors.Is(upErr, gomigrate.ErrNoChange) {
+		return nil
+	}
+
+	version, dirty, err := migrator.Version()
+	if err != nil {
+		return errors.Join(upErr, err)
+	}
+
+	if version == 0 || !dirty {
+		return upErr
+	}
+
+	if err := rollbackDirtyMigration(migrator, migrationFolder, version); err != nil {
+		return errors.Join(upErr, err)
+	}
+
+	var wasDirty gomigrate.ErrDirty
+	if errors.As(upErr, &wasDirty) {
+		return nil
+	}
+
+	return upErr
 }

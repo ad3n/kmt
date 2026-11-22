@@ -1,18 +1,19 @@
 package command
 
 import (
-	"os"
+	"database/sql"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type set struct {
-	config *config.Migration
+	config  *config.Migration
+	connect func(*config.Connection) (*sql.DB, error)
 }
 
-func NewSet(config *config.Migration) *set {
-	return &set{config: config}
+func NewSet(cfg *config.Migration) *set {
+	return &set{config: cfg, connect: config.NewConnection}
 }
 
 func (s *set) Call(source string, schema string, version int) error {
@@ -23,24 +24,14 @@ func (s *set) Call(source string, schema string, version int) error {
 	}
 
 	migrationFolder := filepath.Join(s.config.Folder, schema)
-	files, err := os.ReadDir(migrationFolder)
+	versions, err := completeMigrationVersions(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
 
-	valid := false
-	for _, file := range files {
-		s, _ := parseMigrationVersion(file.Name())
-		if version == s {
-			valid = true
-
-			break
-		}
-	}
-
-	if !valid {
+	if _, ok := versions[uint(version)]; !ok {
 		config.ErrorColor.Printf("Migration file for version %s not found\n", config.BoldColor.Sprint(version))
 
 		return nil
@@ -60,7 +51,7 @@ func (s *set) Call(source string, schema string, version int) error {
 		return nil
 	}
 
-	db, err := config.NewConnection(dbConfig)
+	db, err := s.connect(dbConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
