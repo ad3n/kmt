@@ -127,6 +127,7 @@ func TestMigrationEngineSkipsIncompletePairs(t *testing.T) {
 			if err != nil {
 				t.Fatal(errors.Join(err, source.Close()))
 			}
+
 			t.Cleanup(func() {
 				sourceErr, databaseErr := engine.Close()
 				if err := errors.Join(sourceErr, databaseErr); err != nil {

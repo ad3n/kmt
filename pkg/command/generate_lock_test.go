@@ -88,6 +88,7 @@ func TestGenerateRecoversInterruptedMigrationPair(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			t.Cleanup(func() {
 				if err := root.Close(); err != nil {
 					t.Error(err)
@@ -295,7 +296,6 @@ func generateTestProcess(t *testing.T, folder string) func(string, ...string) *e
 
 		return cmd
 	}
-
 }
 
 func startGenerateProcess(t *testing.T, holder *exec.Cmd, marker string) {
