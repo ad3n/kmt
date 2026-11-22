@@ -12,6 +12,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source"
 
 	"github.com/goccy/go-yaml"
 
@@ -77,28 +78,34 @@ func NewMigrator(db *sql.DB, database, schema string, path string) *migrate.Migr
 }
 
 func OpenMigrator(db *sql.DB, database, schema, path string) (*migrate.Migrate, error) {
-	source, err := openMigrationSource(path)
+	migrator, _, err := OpenMigratorWithSource(db, database, schema, path)
+
+	return migrator, err
+}
+
+func OpenMigratorWithSource(db *sql.DB, database, schema, path string) (*migrate.Migrate, source.Driver, error) {
+	migrations, err := openMigrationSource(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ctx := context.Background()
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		return nil, errors.Join(err, source.Close())
+		return nil, nil, errors.Join(err, migrations.Close())
 	}
 
 	driver, err := postgres.WithConnection(ctx, conn, &postgres.Config{SchemaName: schema})
 	if err != nil {
-		return nil, errors.Join(err, conn.Close(), source.Close())
+		return nil, nil, errors.Join(err, conn.Close(), migrations.Close())
 	}
 
-	migrator, err := migrate.NewWithInstance("iofs", source, database, migrationDatabase{Driver: driver, db: db})
+	migrator, err := migrate.NewWithInstance("iofs", migrations, database, migrationDatabase{Driver: driver, db: db})
 	if err != nil {
-		return nil, errors.Join(err, driver.Close(), source.Close())
+		return nil, nil, errors.Join(err, driver.Close(), migrations.Close())
 	}
 
-	return migrator, nil
+	return migrator, migrations, nil
 }
 
 func (m migrationDatabase) Close() error {

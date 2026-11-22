@@ -10,6 +10,7 @@ import (
 	"github.com/ad3n/kmt/v2/pkg/config"
 
 	gomigrate "github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/source"
 )
 
 func parseMigrationVersion(filename string) (int, error) {
@@ -47,11 +48,33 @@ func rollbackDirtyMigration(migrator *gomigrate.Migrate, folder string, version 
 		return fmt.Errorf("dirty migration version %d has no complete pair", version)
 	}
 
+	return rollbackMigration(migrator, version)
+}
+
+func rollbackMigration(migrator *gomigrate.Migrate, version uint) error {
 	if err := migrator.Force(int(version)); err != nil {
 		return err
 	}
 
 	return migrator.Steps(-1)
+}
+
+func requireMigrationPair(migrations source.Driver, version uint) error {
+	up, _, err := migrations.ReadUp(version)
+	if err != nil {
+		return fmt.Errorf("migration version %d has no complete pair: %w", version, err)
+	}
+
+	if err := up.Close(); err != nil {
+		return err
+	}
+
+	down, _, err := migrations.ReadDown(version)
+	if err != nil {
+		return fmt.Errorf("migration version %d has no complete pair: %w", version, err)
+	}
+
+	return down.Close()
 }
 
 func latestMigrationVersion(versions map[uint]struct{}) int {

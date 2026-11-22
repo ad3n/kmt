@@ -16,10 +16,14 @@ import (
 
 type (
 	migrationTestDB struct {
-		executed []string
-		writes   []int64
-		version  int64
-		dirty    bool
+		executed      []string
+		writes        []int64
+		drops         []string
+		dropTable     string
+		dropErr       error
+		beforeVersion func() error
+		version       int64
+		dirty         bool
 	}
 
 	migrationTestConn struct {
@@ -48,7 +52,21 @@ func (c migrationTestConn) QueryContext(_ context.Context, query string, _ []dri
 		return &fixtureRows{columns: []string{"name"}, values: []driver.Value{"fixture"}}, nil
 	case strings.HasPrefix(query, "SELECT COUNT(1) FROM information_schema.tables"):
 		return &fixtureRows{columns: []string{"count"}, values: []driver.Value{int64(1)}}, nil
+	case strings.HasPrefix(query, "SELECT table_name FROM information_schema.tables "):
+		rows := &fixtureRows{columns: []string{"table_name"}}
+		if c.db.dropTable != "" {
+			rows.values = []driver.Value{c.db.dropTable}
+		}
+
+		return rows, nil
 	case strings.HasPrefix(query, "SELECT version, dirty FROM "):
+		if beforeVersion := c.db.beforeVersion; beforeVersion != nil {
+			c.db.beforeVersion = nil
+			if err := beforeVersion(); err != nil {
+				return nil, err
+			}
+		}
+
 		rows := &fixtureRows{columns: []string{"version", "dirty"}}
 		if c.db.version >= 0 || c.db.dirty {
 			rows.values = []driver.Value{c.db.version, c.db.dirty}
@@ -68,6 +86,15 @@ func (c migrationTestConn) ExecContext(_ context.Context, query string, args []d
 	case strings.HasPrefix(query, `INSERT INTO "public"."schema_migrations"`):
 		c.db.version, c.db.dirty = args[0].Value.(int64), args[1].Value.(bool)
 		c.db.writes = append(c.db.writes, c.db.version)
+	case strings.HasPrefix(query, "DROP TABLE IF EXISTS "):
+		c.db.drops = append(c.db.drops, query)
+		if c.db.dropErr != nil {
+			return nil, c.db.dropErr
+		}
+
+		if query == `DROP TABLE IF EXISTS "schema_migrations" CASCADE` {
+			c.db.version, c.db.dirty = -1, false
+		}
 	case strings.HasPrefix(query, "SELECT '"):
 		c.db.executed = append(c.db.executed, query)
 	default:

@@ -1,20 +1,24 @@
 package command
 
 import (
+	"database/sql"
+	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type clean struct {
-	config *config.Migration
+	config  *config.Migration
+	connect func(*config.Connection) (*sql.DB, error)
 }
 
-func NewClean(config *config.Migration) *clean {
-	return &clean{config: config}
+func NewClean(cfg *config.Migration) *clean {
+	return &clean{config: cfg, connect: config.NewConnection}
 }
 
-func (c *clean) Call(source string, schema string) error {
+func (c *clean) Call(source string, schema string) (err error) {
 	dbConfig, ok := c.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -29,33 +33,42 @@ func (c *clean) Call(source string, schema string) error {
 		return nil
 	}
 
-	db, err := config.NewConnection(dbConfig)
+	db, err := c.connect(dbConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
-	defer db.Close()
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, filepath.Join(c.config.Folder, schema))
-	defer migrator.Close()
+	migrationFolder := filepath.Join(c.config.Folder, schema)
+	migrator, migrations, err := config.OpenMigratorWithSource(db, dbConfig.Name, schema, migrationFolder)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sourceErr, databaseErr := migrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
 
 	version, dirty, err := migrator.Version()
 	if err != nil {
 		return err
 	}
 
-	if version > 0 && dirty {
-		if err := migrator.Force(int(version)); err != nil {
-			return err
+	if dirty {
+		if err := requireMigrationPair(migrations, version); err != nil {
+			return fmt.Errorf("dirty %w", err)
 		}
 
-		if err := migrator.Steps(-1); err != nil {
+		if err := rollbackMigration(migrator, version); err != nil {
 			return err
 		}
 	}
 
 	config.SuccessColor.Printf("Migration cleaned on %s schema %s\n", config.BoldColor.Sprint(source), config.BoldColor.Sprint(schema))
 
-	return err
+	return nil
 }

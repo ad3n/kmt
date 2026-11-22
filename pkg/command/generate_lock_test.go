@@ -130,6 +130,8 @@ func TestGenerateRecoversInterruptedMigrationPair(t *testing.T) {
 			}
 
 			if checkpoint == "first_link" && strconv.IntSize == 64 {
+				assertCleanupPreservesInterruptedVersion(t, folder, interruptedMigrationVersion)
+
 				state := &migrationTestDB{version: -1}
 				cfg := &config.Migration{
 					Folder: folder,
@@ -225,6 +227,10 @@ func TestCreateRecoversInterruptedMigrationPair(t *testing.T) {
 
 			if checkpoint == ".down.sql" && !errors.Is(err, os.ErrNotExist) {
 				t.Fatalf("up file before recovery: %v, want not found", err)
+			}
+
+			if checkpoint == ".down.sql" && strconv.IntSize == 64 {
+				assertCleanupPreservesInterruptedVersion(t, folder, interruptedMigrationVersion)
 			}
 
 			output, err := newProcess("", "KMT_TEST_CREATE=normal").CombinedOutput()
