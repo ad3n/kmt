@@ -2,8 +2,8 @@ package command
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
@@ -40,48 +40,66 @@ func (c *compare) Call(source, target, schema string) (uint, uint, int) {
 }
 
 func (c *compare) Report(source, target, schema string) (MigrationComparison, error) {
+	reports, err := c.Reports(source, target, []string{schema})
+	if err != nil {
+		return MigrationComparison{}, err
+	}
+
+	return reports[0], nil
+}
+
+func (c *compare) Reports(source, target string, schemas []string) (_ []MigrationComparison, err error) {
 	sourceConfig := c.config.Connections[source]
 	if sourceConfig == nil {
-		return MigrationComparison{}, fmt.Errorf("database connection %q not found", source)
+		return nil, fmt.Errorf("database connection %q not found", source)
 	}
 
 	targetConfig := c.config.Connections[target]
 	if targetConfig == nil {
-		return MigrationComparison{}, fmt.Errorf("database connection %q not found", target)
+		return nil, fmt.Errorf("database connection %q not found", target)
 	}
 
-	if _, ok := sourceConfig.Schemas[schema]; !ok {
-		return MigrationComparison{}, fmt.Errorf("schema %q not found on %s", schema, source)
+	for _, schema := range schemas {
+		if _, ok := sourceConfig.Schemas[schema]; !ok {
+			return nil, fmt.Errorf("schema %q not found on %s", schema, source)
+		}
+
+		if _, ok := targetConfig.Schemas[schema]; !ok {
+			return nil, fmt.Errorf("schema %q not found on %s", schema, target)
+		}
 	}
 
-	if _, ok := targetConfig.Schemas[schema]; !ok {
-		return MigrationComparison{}, fmt.Errorf("schema %q not found on %s", schema, target)
-	}
-
-	folder := filepath.Join(c.config.Folder, schema)
-	versions, err := completeMigrationVersions(folder)
+	snapshots, err := openMigrationReportSnapshots(c.config.Folder, schemas)
 	if err != nil {
-		return MigrationComparison{}, err
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, closeMigrationReportSnapshots(snapshots))
+	}()
+
+	reports := make([]MigrationComparison, 0, len(schemas))
+	for _, schema := range schemas {
+		snapshot := snapshots[schema]
+		sourceVersion, err := readDatabaseMigrationVersion(c.connect, sourceConfig, schema, snapshot.Driver)
+		if err != nil {
+			return nil, err
+		}
+
+		targetVersion, err := readDatabaseMigrationVersion(c.connect, targetConfig, schema, snapshot.Driver)
+		if err != nil {
+			return nil, err
+		}
+
+		latest := snapshot.latestVersion()
+		reports = append(reports, MigrationComparison{
+			Source:   uint(max(sourceVersion, 0)),
+			Target:   uint(max(targetVersion, 0)),
+			Latest:   uint(max(latest, 0)),
+			Diff:     snapshot.difference(sourceVersion, targetVersion),
+			InSync:   sourceVersion == targetVersion,
+			AtLatest: latest == sourceVersion && sourceVersion == targetVersion,
+		})
 	}
 
-	sourceVersion, err := readDatabaseMigrationVersion(c.connect, sourceConfig, schema, folder)
-	if err != nil {
-		return MigrationComparison{}, err
-	}
-
-	targetVersion, err := readDatabaseMigrationVersion(c.connect, targetConfig, schema, folder)
-	if err != nil {
-		return MigrationComparison{}, err
-	}
-
-	latest := latestMigrationVersion(versions)
-
-	return MigrationComparison{
-		Source:   uint(max(sourceVersion, 0)),
-		Target:   uint(max(targetVersion, 0)),
-		Latest:   uint(max(latest, 0)),
-		Diff:     migrationDifference(versions, sourceVersion, targetVersion),
-		InSync:   sourceVersion == targetVersion,
-		AtLatest: latest == sourceVersion && sourceVersion == targetVersion,
-	}, nil
+	return reports, nil
 }

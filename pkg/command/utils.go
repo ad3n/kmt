@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"strconv"
-	"strings"
+	"math"
+	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 
@@ -14,29 +14,59 @@ import (
 	"github.com/golang-migrate/migrate/v4/source"
 )
 
-func parseMigrationVersion(filename string) (int, error) {
-	version, _, _ := strings.Cut(filename, "_")
-
-	return strconv.Atoi(version)
+type migrationReportSnapshot struct {
+	source.Driver
+	versions []int
 }
 
-func completeMigrationVersions(folder string) (map[uint]struct{}, error) {
-	files, err := config.ReadMigrationFiles(folder)
-	if err != nil {
-		return nil, err
-	}
-
-	versions := make(map[uint]struct{}, len(files)/2)
-	for _, file := range files {
-		version, err := parseMigrationVersion(file.Name())
+func openMigrationReportSnapshots(folder string, schemas []string) (_ map[string]migrationReportSnapshot, err error) {
+	snapshots := make(map[string]migrationReportSnapshot, len(schemas))
+	defer func() {
 		if err != nil {
-			return nil, fmt.Errorf("read migration version from %q: %w", file.Name(), err)
+			err = errors.Join(err, closeMigrationReportSnapshots(snapshots))
+		}
+	}()
+
+	for _, schema := range schemas {
+		if _, ok := snapshots[schema]; ok {
+			continue
 		}
 
-		versions[uint(version)] = struct{}{}
+		migrations, err := config.OpenMigrationSource(filepath.Join(folder, schema))
+		if err != nil {
+			return nil, err
+		}
+
+		snapshot := migrationReportSnapshot{Driver: migrations}
+		for version, err := migrations.First(); ; version, err = migrations.Next(version) {
+			if errors.Is(err, fs.ErrNotExist) {
+				break
+			}
+
+			if err != nil {
+				return nil, errors.Join(err, migrations.Close())
+			}
+
+			if version > math.MaxInt {
+				return nil, errors.Join(fmt.Errorf("migration version %d exceeds the supported range", version), migrations.Close())
+			}
+
+			snapshot.versions = append(snapshot.versions, int(version))
+		}
+
+		snapshots[schema] = snapshot
 	}
 
-	return versions, nil
+	return snapshots, nil
+}
+
+func closeMigrationReportSnapshots(snapshots map[string]migrationReportSnapshot) error {
+	var err error
+	for _, snapshot := range snapshots {
+		err = errors.Join(err, snapshot.Close())
+	}
+
+	return err
 }
 
 func availableMigrationSteps(migrations source.Driver, version uint, unversioned bool, limit int) (int, error) {
@@ -102,20 +132,19 @@ func requireMigrationPair(migrations source.Driver, version uint) error {
 	return down.Close()
 }
 
-func latestMigrationVersion(versions map[uint]struct{}) int {
-	latest := -1
-	for version := range versions {
-		latest = max(latest, int(version))
+func (snapshot migrationReportSnapshot) latestVersion() int {
+	if len(snapshot.versions) == 0 {
+		return -1
 	}
 
-	return latest
+	return snapshot.versions[len(snapshot.versions)-1]
 }
 
-func migrationDifference(versions map[uint]struct{}, from, to int) int {
+func (snapshot migrationReportSnapshot) difference(from, to int) int {
 	lower, upper := min(from, to), max(from, to)
 	count := 0
-	for version := range versions {
-		if int(version) > lower && int(version) <= upper {
+	for _, version := range snapshot.versions {
+		if version > lower && version <= upper {
 			count++
 		}
 	}
@@ -127,7 +156,7 @@ func migrationDifference(versions map[uint]struct{}, from, to int) int {
 	return count
 }
 
-func readDatabaseMigrationVersion(connect func(*config.Connection) (*sql.DB, error), connection *config.Connection, schema, folder string) (version int, err error) {
+func readDatabaseMigrationVersion(connect func(*config.Connection) (*sql.DB, error), connection *config.Connection, schema string, migrations source.Driver) (version int, err error) {
 	db, err := connect(connection)
 	if err != nil {
 		return 0, err
@@ -136,7 +165,7 @@ func readDatabaseMigrationVersion(connect func(*config.Connection) (*sql.DB, err
 		err = errors.Join(err, db.Close())
 	}()
 
-	migrator, err := config.OpenMigrator(db, connection.Name, schema, folder)
+	migrator, err := config.OpenMigratorFromSource(db, connection.Name, schema, migrations)
 	if err != nil {
 		return 0, err
 	}

@@ -356,63 +356,36 @@ func main() {
 						return nil
 					}
 
-					number := 1
 					db := cmd.Args().Get(0)
-					clusters, ok := cfg.Migration.Clusters[db]
+					connections, ok := cfg.Migration.Clusters[db]
 					if !ok {
-						source, ok := cfg.Migration.Connections[db]
-						if !ok {
+						if _, ok := cfg.Migration.Connections[db]; !ok {
 							return fmt.Errorf("cluster/connection '%s' not found", db)
 						}
 
-						for k := range source.Schemas {
-							report, err := cmdVersion.Report(db, k)
-							if err != nil {
-								config.ErrorColor.Println(err.Error())
+						connections = []string{db}
+					}
 
-								return nil
-							}
-
-							sync := report.InSync
-							status := color.New(color.FgRed, color.Bold).Sprint("x")
-							if sync {
-								status = color.New(color.FgGreen).Sprint("v")
-							}
-
-							t.AddRow(color.New(color.Bold).Sprint(number), db, k, strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Database)), status, strconv.Itoa(report.Diff))
-
-							number++
+					for _, name := range connections {
+						if _, ok := cfg.Migration.Connections[name]; !ok {
+							return fmt.Errorf("connection for '%s' not found", name)
 						}
+					}
 
-						t.Render()
+					rows, err := cmdVersion.Reports(connections)
+					if err != nil {
+						config.ErrorColor.Println(err.Error())
 
 						return nil
 					}
 
-					for _, c := range clusters {
-						source, ok := cfg.Migration.Connections[c]
-						if !ok {
-							return fmt.Errorf("connection for '%s' not found", c)
+					for i, row := range rows {
+						status := color.New(color.FgRed, color.Bold).Sprint("x")
+						if row.InSync {
+							status = color.New(color.FgGreen).Sprint("v")
 						}
 
-						for k := range source.Schemas {
-							report, err := cmdVersion.Report(c, k)
-							if err != nil {
-								config.ErrorColor.Println(err.Error())
-
-								return nil
-							}
-
-							sync := report.InSync
-							status := color.New(color.FgRed, color.Bold).Sprint("x")
-							if sync {
-								status = color.New(color.FgGreen).Sprint("v")
-							}
-
-							t.AddRow(color.New(color.Bold).Sprint(number), c, k, strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Database)), status, strconv.Itoa(report.Diff))
-
-							number++
-						}
+						t.AddRow(color.New(color.Bold).Sprint(i+1), row.Connection, row.Schema, strconv.Itoa(int(row.Latest)), strconv.Itoa(int(row.Database)), status, strconv.Itoa(row.Diff))
 					}
 
 					t.Render()
@@ -480,29 +453,28 @@ func main() {
 						return nil
 					}
 
-					number := 1
 					t.SetHeaders("NO", "SCHEMA", "FILE", strings.ToUpper(cmd.Args().Get(0)), strings.ToUpper(cmd.Args().Get(1)), "SYNC", "DIFF")
-					for k := range source.Schemas {
-						if _, ok := compare.Schemas[k]; !ok {
-							continue
+					schemas := make([]string, 0, min(len(source.Schemas), len(compare.Schemas)))
+					for schema := range source.Schemas {
+						if _, ok := compare.Schemas[schema]; ok {
+							schemas = append(schemas, schema)
 						}
+					}
 
-						report, err := cmdCompare.Report(cmd.Args().Get(0), cmd.Args().Get(1), k)
-						if err != nil {
-							config.ErrorColor.Println(err.Error())
+					reports, err := cmdCompare.Reports(cmd.Args().Get(0), cmd.Args().Get(1), schemas)
+					if err != nil {
+						config.ErrorColor.Println(err.Error())
 
-							return nil
-						}
+						return nil
+					}
 
-						sync := report.AtLatest
+					for i, report := range reports {
 						status := color.New(color.FgRed, color.Bold).Sprint("x")
-						if sync {
+						if report.AtLatest {
 							status = color.New(color.FgGreen).Sprint("v")
 						}
 
-						t.AddRow(color.New(color.Bold).Sprint(number), k, strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Source)), strconv.Itoa(int(report.Target)), status, strconv.Itoa(report.Diff))
-
-						number++
+						t.AddRow(color.New(color.Bold).Sprint(i+1), schemas[i], strconv.Itoa(int(report.Latest)), strconv.Itoa(int(report.Source)), strconv.Itoa(int(report.Target)), status, strconv.Itoa(report.Diff))
 					}
 
 					t.Render()
