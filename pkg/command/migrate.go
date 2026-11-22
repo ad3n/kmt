@@ -1,20 +1,24 @@
 package command
 
 import (
+	"database/sql"
+	"errors"
+	"io/fs"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
 )
 
 type migrate struct {
-	config *config.Migration
+	config  *config.Migration
+	connect func(*config.Connection) (*sql.DB, error)
 }
 
-func NewMigrate(config *config.Migration) *migrate {
-	return &migrate{config: config}
+func NewMigrate(cfg *config.Migration) *migrate {
+	return &migrate{config: cfg, connect: config.NewConnection}
 }
 
-func (m *migrate) Call(source string, schema string, version int) error {
+func (m *migrate) Call(source string, schema string, version int) (err error) {
 	if version <= 0 {
 		config.ErrorColor.Println("Invalid version")
 
@@ -22,24 +26,21 @@ func (m *migrate) Call(source string, schema string, version int) error {
 	}
 
 	migrationFolder := filepath.Join(m.config.Folder, schema)
-	files, err := config.ReadMigrationFiles(migrationFolder)
+	migrations, err := config.OpenMigrationSource(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
+	defer func() {
+		err = errors.Join(err, migrations.Close())
+	}()
 
-	valid := false
-	for _, file := range files {
-		fileVersion, err := parseMigrationVersion(file.Name())
-		if err == nil && version == fileVersion {
-			valid = true
-
-			break
+	if err := requireMigrationPair(migrations, uint(version)); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
 		}
-	}
 
-	if !valid {
 		config.ErrorColor.Printf("Migration file for version %s not found\n", config.BoldColor.Sprint(version))
 
 		return nil
@@ -59,16 +60,24 @@ func (m *migrate) Call(source string, schema string, version int) error {
 		return nil
 	}
 
-	db, err := config.NewConnection(dbConfig)
+	db, err := m.connect(dbConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
-	defer db.Close()
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
-	defer migrator.Close()
+	migrator, err := config.OpenMigratorFromSource(db, dbConfig.Name, schema, migrations)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sourceErr, databaseErr := migrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
 
 	err = migrator.Migrate(uint(version))
 	if err != nil {

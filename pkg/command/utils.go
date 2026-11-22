@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,39 @@ func completeMigrationVersions(folder string) (map[uint]struct{}, error) {
 	}
 
 	return versions, nil
+}
+
+func availableMigrationSteps(migrations source.Driver, version uint, unversioned bool, limit int) (int, error) {
+	count := 0
+	if unversioned {
+		first, err := migrations.First()
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, nil
+		}
+
+		if err != nil {
+			return 0, err
+		}
+
+		version = first
+		count++
+	}
+
+	for count < limit {
+		next, err := migrations.Next(version)
+		if errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+
+		if err != nil {
+			return 0, err
+		}
+
+		version = next
+		count++
+	}
+
+	return count, nil
 }
 
 func rollbackDirtyMigration(migrator *gomigrate.Migrate, migrations source.Driver, version uint) error {

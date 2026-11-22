@@ -20,7 +20,7 @@ func NewCopy(cfg *config.Migration) *copy {
 	return &copy{config: cfg, connect: config.NewConnection}
 }
 
-func (c *copy) Call(schema string, source string, destination string) error {
+func (c *copy) Call(schema string, source string, destination string) (err error) {
 	sourceConfig, ok := c.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -49,13 +49,24 @@ func (c *copy) Call(schema string, source string, destination string) error {
 		return nil
 	}
 
+	migrationFolder := filepath.Join(c.config.Folder, schema)
+	migrations, err := config.OpenMigrationSource(migrationFolder)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, migrations.Close())
+	}()
+
 	sourceDb, err := c.connect(sourceConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
-	defer sourceDb.Close()
+	defer func() {
+		err = errors.Join(err, sourceDb.Close())
+	}()
 
 	destinationDb, err := c.connect(destinationConfig)
 	if err != nil {
@@ -63,27 +74,37 @@ func (c *copy) Call(schema string, source string, destination string) error {
 
 		return nil
 	}
-	defer destinationDb.Close()
+	defer func() {
+		err = errors.Join(err, destinationDb.Close())
+	}()
 
-	migrationFolder := filepath.Join(c.config.Folder, schema)
-	versions, err := completeMigrationVersions(migrationFolder)
+	sourceMigrator, err := config.OpenMigratorFromSource(sourceDb, sourceConfig.Name, schema, migrations)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		sourceErr, databaseErr := sourceMigrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
 
-	sourceMigrator := config.NewMigrator(sourceDb, sourceConfig.Name, schema, migrationFolder)
-	defer sourceMigrator.Close()
-
-	destinationMigrator := config.NewMigrator(destinationDb, destinationConfig.Name, schema, migrationFolder)
-	defer destinationMigrator.Close()
+	destinationMigrator, err := config.OpenMigratorFromSource(destinationDb, destinationConfig.Name, schema, migrations)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sourceErr, databaseErr := destinationMigrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
 
 	sourceVersion, _, err := sourceMigrator.Version()
 	if err != nil && !errors.Is(err, gomigrate.ErrNilVersion) {
 		return err
 	}
 
-	if _, ok := versions[sourceVersion]; err == nil && !ok {
-		return fmt.Errorf("source migration version %d has no complete pair", sourceVersion)
+	if err == nil {
+		if err := requireMigrationPair(migrations, sourceVersion); err != nil {
+			return fmt.Errorf("source %w", err)
+		}
 	}
 
 	sourcePosition := int(sourceVersion)
@@ -96,8 +117,10 @@ func (c *copy) Call(schema string, source string, destination string) error {
 		return err
 	}
 
-	if _, ok := versions[destinationVersion]; err == nil && !ok {
-		return fmt.Errorf("destination migration version %d has no complete pair", destinationVersion)
+	if err == nil {
+		if err := requireMigrationPair(migrations, destinationVersion); err != nil {
+			return fmt.Errorf("destination %w", err)
+		}
 	}
 
 	destinationPosition := int(destinationVersion)

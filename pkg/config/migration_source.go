@@ -11,11 +11,21 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-type migrationFS struct {
-	fs.FS
+type (
+	migrationFS struct {
+		fs.FS
+	}
+
+	borrowedMigrationSource struct {
+		source.Driver
+	}
+)
+
+func (borrowedMigrationSource) Close() error {
+	return nil
 }
 
-func openMigrationSource(folder string) (source.Driver, error) {
+func OpenMigrationSource(folder string) (source.Driver, error) {
 	return iofs.New(migrationFS{FS: os.DirFS(folder)}, ".")
 }
 

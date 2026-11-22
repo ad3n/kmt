@@ -41,6 +41,17 @@ func (r *run) Call(source string, schema string, step int) (err error) {
 		return nil
 	}
 
+	migrationFolder := filepath.Join(r.config.Folder, schema)
+	migrations, err := config.OpenMigrationSource(migrationFolder)
+	if err != nil {
+		config.ErrorColor.Println(err.Error())
+
+		return nil
+	}
+	defer func() {
+		err = errors.Join(err, migrations.Close())
+	}()
+
 	db, err := r.connect(dbConfig)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
@@ -51,15 +62,7 @@ func (r *run) Call(source string, schema string, step int) (err error) {
 		err = errors.Join(err, db.Close())
 	}()
 
-	migrationFolder := filepath.Join(r.config.Folder, schema)
-	versions, err := completeMigrationVersions(migrationFolder)
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return nil
-	}
-
-	migrator, err := config.OpenMigrator(db, dbConfig.Name, schema, migrationFolder)
+	migrator, err := config.OpenMigratorFromSource(db, dbConfig.Name, schema, migrations)
 	if err != nil {
 		return err
 	}
@@ -74,15 +77,15 @@ func (r *run) Call(source string, schema string, step int) (err error) {
 		return err
 	}
 
-	if _, ok := versions[version]; !unversioned && !ok {
-		return fmt.Errorf("current migration version %d has no complete pair", version)
+	if !unversioned {
+		if err := requireMigrationPair(migrations, version); err != nil {
+			return fmt.Errorf("current %w", err)
+		}
 	}
 
-	available := 0
-	for candidate := range versions {
-		if unversioned || candidate > version {
-			available++
-		}
+	available, err := availableMigrationSteps(migrations, version, unversioned, step)
+	if err != nil {
+		return err
 	}
 
 	if available == 0 {
@@ -91,7 +94,7 @@ func (r *run) Call(source string, schema string, step int) (err error) {
 		return nil
 	}
 
-	if err := migrator.Steps(min(step, available)); err != nil {
+	if err := migrator.Steps(available); err != nil {
 		return err
 	}
 

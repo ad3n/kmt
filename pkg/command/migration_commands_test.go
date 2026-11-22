@@ -21,6 +21,7 @@ type (
 		drops         []string
 		dropTable     string
 		dropErr       error
+		beforeConnect func() error
 		beforeVersion func() error
 		version       int64
 		dirty         bool
@@ -35,6 +36,13 @@ type (
 )
 
 func (db *migrationTestDB) Connect(context.Context) (driver.Conn, error) {
+	if beforeConnect := db.beforeConnect; beforeConnect != nil {
+		db.beforeConnect = nil
+		if err := beforeConnect(); err != nil {
+			return nil, err
+		}
+	}
+
 	return db.Open("")
 }
 

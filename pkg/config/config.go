@@ -84,28 +84,41 @@ func OpenMigrator(db *sql.DB, database, schema, path string) (*migrate.Migrate, 
 }
 
 func OpenMigratorWithSource(db *sql.DB, database, schema, path string) (*migrate.Migrate, source.Driver, error) {
-	migrations, err := openMigrationSource(path)
+	migrations, err := OpenMigrationSource(path)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ctx := context.Background()
-	conn, err := db.Conn(ctx)
+	migrator, err := openMigratorFromSource(db, database, schema, migrations)
 	if err != nil {
 		return nil, nil, errors.Join(err, migrations.Close())
 	}
 
+	return migrator, migrations, nil
+}
+
+func OpenMigratorFromSource(db *sql.DB, database, schema string, migrations source.Driver) (*migrate.Migrate, error) {
+	return openMigratorFromSource(db, database, schema, borrowedMigrationSource{Driver: migrations})
+}
+
+func openMigratorFromSource(db *sql.DB, database, schema string, migrations source.Driver) (*migrate.Migrate, error) {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	driver, err := postgres.WithConnection(ctx, conn, &postgres.Config{SchemaName: schema})
 	if err != nil {
-		return nil, nil, errors.Join(err, conn.Close(), migrations.Close())
+		return nil, errors.Join(err, conn.Close())
 	}
 
 	migrator, err := migrate.NewWithInstance("iofs", migrations, database, migrationDatabase{Driver: driver, db: db})
 	if err != nil {
-		return nil, nil, errors.Join(err, driver.Close(), migrations.Close())
+		return nil, errors.Join(err, driver.Close())
 	}
 
-	return migrator, migrations, nil
+	return migrator, nil
 }
 
 func (m migrationDatabase) Close() error {

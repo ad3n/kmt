@@ -117,7 +117,7 @@ func TestMigrationEngineSkipsIncompletePairs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			source, err := openMigrationSource(folder)
+			source, err := OpenMigrationSource(folder)
 			if err != nil {
 				t.Fatal(err)
 			}

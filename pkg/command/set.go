@@ -2,6 +2,8 @@ package command
 
 import (
 	"database/sql"
+	"errors"
+	"io/fs"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
@@ -16,7 +18,7 @@ func NewSet(cfg *config.Migration) *set {
 	return &set{config: cfg, connect: config.NewConnection}
 }
 
-func (s *set) Call(source string, schema string, version int) error {
+func (s *set) Call(source string, schema string, version int) (err error) {
 	if version <= 0 {
 		config.ErrorColor.Println("Invalid version")
 
@@ -24,14 +26,21 @@ func (s *set) Call(source string, schema string, version int) error {
 	}
 
 	migrationFolder := filepath.Join(s.config.Folder, schema)
-	versions, err := completeMigrationVersions(migrationFolder)
+	migrations, err := config.OpenMigrationSource(migrationFolder)
 	if err != nil {
 		config.ErrorColor.Println(err.Error())
 
 		return nil
 	}
+	defer func() {
+		err = errors.Join(err, migrations.Close())
+	}()
 
-	if _, ok := versions[uint(version)]; !ok {
+	if err := requireMigrationPair(migrations, uint(version)); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+
 		config.ErrorColor.Printf("Migration file for version %s not found\n", config.BoldColor.Sprint(version))
 
 		return nil
@@ -57,10 +66,18 @@ func (s *set) Call(source string, schema string, version int) error {
 
 		return nil
 	}
-	defer db.Close()
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
 
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
-	defer migrator.Close()
+	migrator, err := config.OpenMigratorFromSource(db, dbConfig.Name, schema, migrations)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sourceErr, databaseErr := migrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
 
 	err = migrator.Force(version)
 	if err != nil {
