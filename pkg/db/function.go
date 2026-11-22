@@ -15,14 +15,6 @@ func NewFunction(db *sql.DB) *function {
 	return &function{db: db}
 }
 
-func (s *function) GenerateDdlSingle(schema, name string) <-chan *Migration {
-	return collectMigrations(queryMigrations(context.Background(), s.db, fmt.Sprintf(QUERY_FUNCTION, schema, name), s.scanMigration))
-}
-
-func (s *function) GenerateDdl(schema string) <-chan *Migration {
-	return collectMigrations(s.Migrations(context.Background(), schema))
-}
-
 func (s *function) Migrations(ctx context.Context, schema string, names ...string) iter.Seq2[*Migration, error] {
 	return objectMigrations(ctx, s.db, QUERY_LIST_FUNCTION, QUERY_FUNCTION, schema, names, s.scanMigration)
 }

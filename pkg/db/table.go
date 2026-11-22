@@ -87,10 +87,6 @@ func (t *Table) Detail(schema, table string) (map[string]*Column, error) {
 	return result, nil
 }
 
-func (t *Table) Generate(name string, schemaOnly bool) (*Ddl, error) {
-	return t.GenerateContext(context.Background(), name, schemaOnly)
-}
-
 func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly bool) (*Ddl, error) {
 	options := []string{
 		"--no-comments",

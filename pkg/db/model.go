@@ -32,10 +32,6 @@ type (
 	Inspect struct {
 		Tables map[string]*Column
 	}
-
-	Migrate interface {
-		GenerateDdl(schema string) []*Migration
-	}
 )
 
 const (
@@ -183,13 +179,6 @@ WHERE table_type='BASE TABLE'
     AND table_schema='%s'
 ORDER BY table_name;`
 
-	QUERY_COUNT_TABLE = `
-SELECT
-    COUNT(1) as total
-FROM information_schema.tables
-WHERE table_type='BASE TABLE'
-    AND table_schema='%s';`
-
 	QUERY_LIST_VIEW = `
 SELECT
     COALESCE(table_name, '') AS view_name,
@@ -270,26 +259,4 @@ func queryMigrations(ctx context.Context, db *sql.DB, query string, scan func(*s
 			yield(nil, err)
 		}
 	}
-}
-
-func collectMigrations(migrations iter.Seq2[*Migration, error]) <-chan *Migration {
-	var items []*Migration
-	for item, err := range migrations {
-		if err != nil {
-			fmt.Println(err)
-
-			break
-		}
-
-		items = append(items, item)
-	}
-
-	result := make(chan *Migration, len(items))
-	defer close(result)
-
-	for _, item := range items {
-		result <- item
-	}
-
-	return result
 }

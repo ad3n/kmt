@@ -22,7 +22,8 @@ func TestGenerateTablesGlobalIncludeDataPreservesScope(t *testing.T) {
 	g, folder := newTestGenerator(t, false)
 	scope := &GenerateScope{Tables: []string{"first", "second"}, IncludeData: true}
 	wantScope := &GenerateScope{Tables: []string{"first", "second"}, IncludeData: true}
-	next, err := g.generateTables("source", "public", map[string][]string{}, folder, 100, scope)
+	root := openTestMigrationRoot(t, folder)
+	next, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, scope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func TestGenerateTablesCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := g.generateTablesContext(ctx, "source", "public", map[string][]string{}, folder, 100, &GenerateScope{
+	_, err := g.generateTablesInRoot(ctx, "source", "public", nil, openTestMigrationRoot(t, folder), 100, &GenerateScope{
 		Tables: []string{"first", "second", "third", "fourth", "fifth"},
 	}, nil)
 	if !errors.Is(err, context.Canceled) {
@@ -66,7 +67,8 @@ func TestGenerateTablesQueuedJobsKeepIdentity(t *testing.T) {
 	scope := &GenerateScope{Tables: tables, IncludeData: true}
 	wantScope := &GenerateScope{Tables: append([]string(nil), tables...), IncludeData: true}
 
-	next, err := g.generateTables("source", "public", nil, folder, 100, scope)
+	root := openTestMigrationRoot(t, folder)
+	next, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, scope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,9 +188,10 @@ func TestGenerateCancelsRunningPgDump(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
+	root := openTestMigrationRoot(t, folder)
 	done := make(chan error, 1)
 	go func() {
-		_, err := g.generateTablesContext(ctx, "source", "public", nil, folder, 100, &GenerateScope{Tables: []string{"cancel"}}, nil)
+		_, err := g.generateTablesInRoot(ctx, "source", "public", nil, root, 100, &GenerateScope{Tables: []string{"cancel"}}, nil)
 		done <- err
 	}()
 
@@ -284,7 +287,8 @@ func TestGenerateRejectsSchemaSymlinkOutsideMigrationFolder(t *testing.T) {
 
 func TestGenerateDoesNotWrapMigrationVersion(t *testing.T) {
 	g, folder := newTestGenerator(t, false)
-	_, err := g.generateTables("source", "public", nil, folder, math.MaxInt64-3, &GenerateScope{Tables: []string{"plain"}})
+	root := openTestMigrationRoot(t, folder)
+	_, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, math.MaxInt64-3, &GenerateScope{Tables: []string{"plain"}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "version exhausted") {
 		t.Fatalf("error = %v, want migration version exhaustion", err)
 	}

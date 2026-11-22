@@ -32,17 +32,6 @@ func NewVersion(cfg *config.Migration) *version {
 	return &version{config: cfg, connect: config.NewConnection}
 }
 
-func (v *version) Call(source string, schema string) (uint, uint, int) {
-	report, err := v.Report(source, schema)
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return 0, 0, 0
-	}
-
-	return report.Database, report.Latest, report.Diff
-}
-
 func (v *version) Report(source, schema string) (MigrationVersion, error) {
 	connection := v.config.Connections[source]
 	if connection == nil {

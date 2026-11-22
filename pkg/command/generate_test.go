@@ -110,10 +110,10 @@ func TestGenerateTablesKeepsOrderAndPerTableDataScope(t *testing.T) {
 	defer cancel()
 
 	var completed []string
-	next, err := g.generateTablesContext(ctx, "source", "public", map[string][]string{
+	next, err := g.generateTablesInRoot(ctx, "source", "public", map[string][]string{
 		"with_data": {"slow"},
 		"excludes":  {},
-	}, folder, 100, scope, func(message string) {
+	}, openTestMigrationRoot(t, folder), 100, scope, func(message string) {
 		completed = append(completed, message)
 	})
 	if err != nil {
@@ -163,7 +163,8 @@ func TestGenerateTablesKeepsOrderAndPerTableDataScope(t *testing.T) {
 
 func TestGenerateTablesReturnsPgDumpError(t *testing.T) {
 	g, folder := newTestGenerator(t, true)
-	_, err := g.generateTables("source", "public", map[string][]string{}, folder, 100, &GenerateScope{Tables: []string{"broken"}})
+	root := openTestMigrationRoot(t, folder)
+	_, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, &GenerateScope{Tables: []string{"broken"}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "pg_dump table public.broken") {
 		t.Fatalf("error = %v, want pg_dump error", err)
 	}
@@ -171,7 +172,8 @@ func TestGenerateTablesReturnsPgDumpError(t *testing.T) {
 
 func TestGenerateTablesKeepsSqlClassification(t *testing.T) {
 	g, folder := newTestGenerator(t, false)
-	_, err := g.generateTables("source", "public", map[string][]string{}, folder, 100, &GenerateScope{Tables: []string{"plain"}})
+	root := openTestMigrationRoot(t, folder)
+	_, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, &GenerateScope{Tables: []string{"plain"}}, nil)
 	if err != nil {
 		t.Fatalf("generate tables: %v", err)
 	}
@@ -184,10 +186,11 @@ func TestGenerateTablesKeepsSqlClassification(t *testing.T) {
 
 func TestGenerateTablesKeepsMultilineInsertOutOfTableDefinition(t *testing.T) {
 	g, folder := newTestGenerator(t, false)
-	_, err := g.generateTables("source", "public", map[string][]string{}, folder, 100, &GenerateScope{
+	root := openTestMigrationRoot(t, folder)
+	_, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, &GenerateScope{
 		Tables:      []string{"multiline"},
 		IncludeData: true,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("generate tables: %v", err)
 	}
@@ -198,10 +201,11 @@ func TestGenerateTablesKeepsMultilineInsertOutOfTableDefinition(t *testing.T) {
 
 func TestGenerateTablesKeepsSQLKeywordsInsideInsertData(t *testing.T) {
 	g, folder := newTestGenerator(t, false)
-	_, err := g.generateTables("source", "public", nil, folder, 100, &GenerateScope{
+	root := openTestMigrationRoot(t, folder)
+	_, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, &GenerateScope{
 		Tables:      []string{"keywords"},
 		IncludeData: true,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +222,7 @@ func TestNextMigrationVersionAvoidsOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	version, err := nextMigrationVersion(folder, 100)
+	version, err := nextVersion(os.DirFS(folder), 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,6 +284,23 @@ func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 	}
 
 	return NewGenerate(cfg, connection), t.TempDir()
+}
+
+func openTestMigrationRoot(t *testing.T, folder string) *os.Root {
+	t.Helper()
+
+	root, err := os.OpenRoot(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		if err := root.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	return root
 }
 
 func assertFileContent(t *testing.T, folder, name, want string) {

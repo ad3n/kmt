@@ -63,10 +63,6 @@ func withMigrationWriteLock(path, schema string, write func(*os.Root) error) (er
 	return write(folder)
 }
 
-func nextMigrationVersion(folder string, current int64) (int64, error) {
-	return nextVersion(os.DirFS(folder), current)
-}
-
 func nextVersion(folder fs.FS, current int64) (int64, error) {
 	entries, err := fs.ReadDir(folder, ".")
 	if err != nil {

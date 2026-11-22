@@ -16,14 +16,6 @@ func NewEnum(db *sql.DB) *enum {
 	return &enum{db: db}
 }
 
-func (s *enum) GenerateDdlSingle(schema, name string) <-chan *Migration {
-	return collectMigrations(queryMigrations(context.Background(), s.db, fmt.Sprintf(QUERY_ENUM, schema, name), s.scanMigration))
-}
-
-func (s *enum) GenerateDdl(schema string) <-chan *Migration {
-	return collectMigrations(s.Migrations(context.Background(), schema))
-}
-
 func (s *enum) Migrations(ctx context.Context, schema string, names ...string) iter.Seq2[*Migration, error] {
 	return objectMigrations(ctx, s.db, QUERY_LIST_ENUM, QUERY_ENUM, schema, names, s.scanMigration)
 }

@@ -28,17 +28,6 @@ func NewCompare(cfg *config.Migration) *compare {
 	return &compare{config: cfg, connect: config.NewConnection}
 }
 
-func (c *compare) Call(source, target, schema string) (uint, uint, int) {
-	report, err := c.Report(source, target, schema)
-	if err != nil {
-		config.ErrorColor.Println(err.Error())
-
-		return 0, 0, 0
-	}
-
-	return report.Source, report.Target, report.Diff
-}
-
 func (c *compare) Report(source, target, schema string) (MigrationComparison, error) {
 	reports, err := c.Reports(source, target, []string{schema})
 	if err != nil {

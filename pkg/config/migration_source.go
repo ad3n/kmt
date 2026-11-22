@@ -29,10 +29,6 @@ func OpenMigrationSource(folder string) (source.Driver, error) {
 	return iofs.New(migrationFS{FS: os.DirFS(folder)}, ".")
 }
 
-func ReadMigrationFiles(folder string) ([]fs.DirEntry, error) {
-	return (migrationFS{FS: os.DirFS(folder)}).ReadDir(".")
-}
-
 func (m migrationFS) ReadDir(dir string) ([]fs.DirEntry, error) {
 	entries, err := fs.ReadDir(m.FS, dir)
 	if err != nil {

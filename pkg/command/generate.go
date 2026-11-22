@@ -57,10 +57,6 @@ func NewGenerate(config *config.Migration, connection *sql.DB) *generate {
 	}
 }
 
-func (g *generate) Call(connection string, schema string, scope *GenerateScope) error {
-	return g.CallContext(context.Background(), connection, schema, scope)
-}
-
 func (g *generate) CallContext(ctx context.Context, connection string, schema string, scope *GenerateScope) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -185,38 +181,6 @@ func (g *generate) writeObjects(ctx context.Context, folder *os.Root, version in
 	}
 
 	return version, ctx.Err()
-}
-
-func (g *generate) generateTables(
-	connection string,
-	schema string,
-	schemaConfig map[string][]string,
-	folder string,
-	version int64,
-	scope *GenerateScope,
-) (int64, error) {
-	return g.generateTablesContext(context.Background(), connection, schema, schemaConfig, folder, version, scope, nil)
-}
-
-func (g *generate) generateTablesContext(
-	parentCtx context.Context,
-	connection string,
-	schema string,
-	schemaConfig map[string][]string,
-	folder string,
-	version int64,
-	scope *GenerateScope,
-	progress func(string),
-) (_ int64, err error) {
-	root, err := os.OpenRoot(folder)
-	if err != nil {
-		return version, err
-	}
-	defer func() {
-		err = errors.Join(err, root.Close())
-	}()
-
-	return g.generateTablesInRoot(parentCtx, connection, schema, schemaConfig, root, version, scope, progress)
 }
 
 func (g *generate) generateTablesInRoot(

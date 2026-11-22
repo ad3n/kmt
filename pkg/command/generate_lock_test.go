@@ -116,18 +116,23 @@ func TestGenerateRecoversInterruptedMigrationPair(t *testing.T) {
 				assertFileContent(t, migrationFolder, interrupted+".up.sql", "interrupted up")
 			}
 
-			visible, err := config.ReadMigrationFiles(migrationFolder)
+			snapshot, err := config.OpenMigrationSource(migrationFolder)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			wantVisible := 2
-			if checkpoint == "both_links" {
-				wantVisible = 4
+			visible, err := availableMigrationSteps(snapshot, 0, true, 3)
+			if err := errors.Join(err, snapshot.Close()); err != nil {
+				t.Fatal(err)
 			}
 
-			if len(visible) != wantVisible {
-				t.Fatalf("migration reader saw %d files after SIGKILL, want %d", len(visible), wantVisible)
+			wantVisible := 1
+			if checkpoint == "both_links" {
+				wantVisible = 2
+			}
+
+			if visible != wantVisible {
+				t.Fatalf("migration reader saw %d versions after SIGKILL, want %d", visible, wantVisible)
 			}
 
 			if checkpoint == "first_link" && strconv.IntSize == 64 {

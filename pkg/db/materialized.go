@@ -15,14 +15,6 @@ func NewMaterializedView(db *sql.DB) *materialized {
 	return &materialized{db: db}
 }
 
-func (s *materialized) GenerateDdlSingle(schema, name string) <-chan *Migration {
-	return collectMigrations(queryMigrations(context.Background(), s.db, fmt.Sprintf(QUERY_MATERIALIZED_VIEW, schema, name), s.scanMigration))
-}
-
-func (s *materialized) GenerateDdl(schema string) <-chan *Migration {
-	return collectMigrations(s.Migrations(context.Background(), schema))
-}
-
 func (s *materialized) Migrations(ctx context.Context, schema string, names ...string) iter.Seq2[*Migration, error] {
 	return objectMigrations(ctx, s.db, QUERY_LIST_MATERIALIZED_VIEW, QUERY_MATERIALIZED_VIEW, schema, names, s.scanMigration)
 }

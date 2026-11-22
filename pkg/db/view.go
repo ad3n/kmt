@@ -15,14 +15,6 @@ func NewView(db *sql.DB) *view {
 	return &view{db: db}
 }
 
-func (s *view) GenerateDdlSingle(schema, name string) <-chan *Migration {
-	return collectMigrations(queryMigrations(context.Background(), s.db, fmt.Sprintf(QUERY_VIEW, schema, name), s.scanMigration))
-}
-
-func (s *view) GenerateDdl(schema string) <-chan *Migration {
-	return collectMigrations(s.Migrations(context.Background(), schema))
-}
-
 func (s *view) Migrations(ctx context.Context, schema string, names ...string) iter.Seq2[*Migration, error] {
 	return objectMigrations(ctx, s.db, QUERY_LIST_VIEW, QUERY_VIEW, schema, names, s.scanMigration)
 }
