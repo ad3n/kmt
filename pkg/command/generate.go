@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
+	"strings"
 	stdsync "sync"
 	"sync/atomic"
 	"time"
@@ -44,9 +46,11 @@ type (
 	}
 
 	migrationResult struct {
-		job *migration
-		ddl *db.Ddl
-		err error
+		err  error
+		job  *migration
+		ddl  *db.Ddl
+		data migrationStage
+		name string
 	}
 )
 
@@ -251,8 +255,9 @@ func (g *generate) generateTablesInRoot(
 				}
 
 				job := &jobs[index]
-				ddl, err := ddlTool.GenerateContext(ctx, schema+"."+job.table, !job.includeData)
-				cResult <- migrationResult{job: job, ddl: ddl, err: err}
+				name := schema + "." + job.table
+				version := insertBase + int64(job.index)
+				cResult <- generateTable(ctx, ddlTool, folder, job, name, version)
 			}
 		})
 	}
@@ -276,17 +281,19 @@ func (g *generate) generateTablesInRoot(
 			))
 		}
 
-		if firstErr != nil {
-			continue
+		if firstErr == nil {
+			firstErr = result.err
+			if firstErr == nil {
+				firstErr = ctx.Err()
+			}
+
+			if firstErr == nil {
+				firstErr = g.writeTable(folder, result, fkBase)
+			}
 		}
 
-		firstErr = result.err
-		if firstErr == nil {
-			firstErr = ctx.Err()
-		}
-
-		if firstErr == nil {
-			firstErr = g.writeTable(folder, result.job, result.ddl, fkBase, insertBase)
+		if result.data.folder != nil {
+			firstErr = errors.Join(firstErr, result.data.discard())
 		}
 
 		if firstErr != nil {
@@ -301,7 +308,67 @@ func (g *generate) generateTablesInRoot(
 	return insertBase + int64(tTable), parentCtx.Err()
 }
 
-func (g *generate) writeTable(folder *os.Root, job *migration, ddl *db.Ddl, fkBase, insertBase int64) error {
+func generateTable(ctx context.Context, table *db.Table, folder *os.Root, job *migration, name string, version int64) migrationResult {
+	result := migrationResult{job: job, name: strings.ReplaceAll(name, ".", "_")}
+	if !job.includeData {
+		result.ddl, result.err = table.GenerateContext(ctx, name, nil, nil)
+
+		return result
+	}
+
+	base := fmt.Sprintf("%d_insert_%s", version, result.name)
+	if !validMigrationComponent(result.name) {
+		result.err = fmt.Errorf("invalid migration name %q", result.name)
+
+		return result
+	}
+
+	stage, err := newMigrationStage(folder, base)
+	if err != nil {
+		result.err = err
+
+		return result
+	}
+
+	result.data = stage
+	result.ddl, result.err = dumpTableData(ctx, table, name, stage)
+
+	return result
+}
+
+func dumpTableData(ctx context.Context, table *db.Table, name string, stage migrationStage) (_ *db.Ddl, err error) {
+	up, err := stage.open(".up.sql")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, up.Close())
+	}()
+
+	down, err := stage.open(".down.sql")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, down.Close())
+	}()
+
+	upWriter := bufio.NewWriterSize(up, 64*1024)
+	downWriter := bufio.NewWriterSize(down, 64*1024)
+	ddl, err := table.GenerateContext(ctx, name, upWriter, downWriter)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := errors.Join(upWriter.Flush(), downWriter.Flush()); err != nil {
+		return nil, fmt.Errorf("flush data migration for table %s: %w", name, err)
+	}
+
+	return ddl, nil
+}
+
+func (g *generate) writeTable(folder *os.Root, result migrationResult, fkBase int64) error {
+	job, ddl := result.job, result.ddl
 	if err := g.write(folder, job.version, "table", job.table, ddl.Definition.UpScript, ddl.Definition.DownScript); err != nil {
 		return err
 	}
@@ -313,13 +380,18 @@ func (g *generate) writeTable(folder *os.Root, job *migration, ddl *db.Ddl, fkBa
 	}
 
 	if ddl.ForeignKey.UpScript != "" {
-		if err := g.write(folder, fkBase+int64(job.index), "foreign_key", ddl.Name, ddl.ForeignKey.UpScript, ddl.ForeignKey.DownScript); err != nil {
+		if err := g.write(folder, fkBase+int64(job.index), "foreign_key", result.name, ddl.ForeignKey.UpScript, ddl.ForeignKey.DownScript); err != nil {
 			return err
 		}
 	}
 
-	if job.includeData && ddl.Insert.UpScript != "" {
-		return g.write(folder, insertBase+int64(job.index), "insert", ddl.Name, ddl.Insert.UpScript, ddl.Insert.DownScript)
+	if job.includeData && ddl.HasInsert {
+		pair, err := result.data.prepare()
+		if err != nil {
+			return err
+		}
+
+		return pair.commit(migrationPair.publish)
 	}
 
 	return nil

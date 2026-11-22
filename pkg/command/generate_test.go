@@ -216,6 +216,46 @@ func TestGenerateTablesKeepsSQLKeywordsInsideInsertData(t *testing.T) {
 		"INSERT INTO public.keywords VALUES ('DROP);\n\n--some text\nSET test\nALTER TABLE ONLY a\nADD CONSTRAINT b\nend');\n")
 }
 
+func TestGenerateTablesDiscardsStagedDataOnPgDumpFailure(t *testing.T) {
+	g, folder := newTestGenerator(t, false)
+	root := openTestMigrationRoot(t, folder)
+	_, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, &GenerateScope{
+		Tables:      []string{"partial_failure"},
+		IncludeData: true,
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "simulated failure after writing data") {
+		t.Fatalf("error = %v, want pg_dump failure after writing data", err)
+	}
+
+	entries, err := os.ReadDir(folder)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("failed dump left %d files or staging directories, read error %v", len(entries), err)
+	}
+}
+
+func TestGenerateTablesDiscardsStagingWithoutInsertData(t *testing.T) {
+	g, folder := newTestGenerator(t, false)
+	root := openTestMigrationRoot(t, folder)
+	_, err := g.generateTablesInRoot(t.Context(), "source", "public", nil, root, 100, &GenerateScope{
+		Tables:      []string{"empty_data"},
+		IncludeData: true,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(folder)
+	if err != nil || len(entries) != 6 {
+		t.Fatalf("expected three schema migration pairs, got %v, read error %v", entries, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || strings.Contains(entry.Name(), "_insert_") {
+			t.Errorf("unexpected data migration or staging directory: %s", entry.Name())
+		}
+	}
+}
+
 func TestNextMigrationVersionAvoidsOverwrite(t *testing.T) {
 	folder := t.TempDir()
 	if err := os.WriteFile(filepath.Join(folder, "200_table_users.up.sql"), nil, 0644); err != nil {
@@ -267,6 +307,8 @@ func newTestGenerator(t *testing.T, fail bool) (*generate, string) {
 		"echo \"    ADD CONSTRAINT test_fkey FOREIGN KEY (id) REFERENCES public.parent(id);\"\n" +
 		"if [ $schema_only -eq 0 ]; then\n" +
 		"  case \"$table\" in\n" +
+		"    *empty_data) ;;\n" +
+		"    *partial_failure) printf \"INSERT INTO %s VALUES (1, '\" \"$table\"; printf '%070000d' 0; printf \"');\\n\"; echo 'simulated failure after writing data' >&2; exit 2;;\n" +
 		"    *multiline) printf \"INSERT INTO %s VALUES (\\n1\\n);\\n\" \"$table\";;\n" +
 		"    *keywords) printf \"INSERT INTO %s VALUES ('DROP);\\n\\n--some text\\nSET test\\nALTER TABLE ONLY a\\nADD CONSTRAINT b\\nend');\\n\" \"$table\";;\n" +
 		"    *) echo \"INSERT INTO $table VALUES (1);\";;\n" +

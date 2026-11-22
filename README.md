@@ -123,6 +123,20 @@ migration:
 
 - Create new migration or generate from `source`
 
+## Benchmark `generate`
+
+From the repository root, run the benchmark with Python 3.9+ and the Go version in `go.mod` on macOS or Linux.
+
+```sh
+python3 benchmarks/generate/run.py
+```
+
+The benchmark runs the KMT CLI with 1, 2, and 4 workers, set through `GOMAXPROCS`. Each run uses a fresh temporary migration directory, a fake PostgreSQL catalog connection in the benchmark build, and a deterministic `pg_dump` executable. It generates 64 SQL files from eight tables with 176,000 INSERT statements, including multiline INSERTs and lines over 64 KiB. No PostgreSQL server is needed.
+
+The runner reports elapsed CLI time and peak RSS in MiB for each run, plus the median and highest observed RSS for each worker count. It reads peak RSS from the operating system's `wait4` result for the KMT command. Build time and SHA-256 verification are outside the measurements. Each run verifies the filename set and SHA-256 of every SQL file against the [manifest captured before the allocation optimization](benchmarks/generate/testdata/sql-sha256.json), including both seed files. A mismatch fails the benchmark.
+
+The default is three runs per worker count. Use `--repeats 1` for a quick check.
+
 ## TODO
 
 - [x] Migrate tables

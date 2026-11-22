@@ -15,11 +15,19 @@ const (
 	migrationPublishPrefix = ".kmt-pair-publish-"
 )
 
-type migrationPair struct {
-	folder  *os.Root
-	journal string
-	base    string
-}
+type (
+	migrationPair struct {
+		folder  *os.Root
+		journal string
+		base    string
+	}
+
+	migrationStage struct {
+		folder *os.Root
+		path   string
+		base   string
+	}
+)
 
 func (g *generate) write(folder *os.Root, version int64, objectType, name, upScript, downScript string) error {
 	if !validMigrationComponent(name) {
@@ -36,46 +44,66 @@ func writeMigrationPair(folder *os.Root, base, upScript, downScript string, publ
 	if err != nil {
 		return err
 	}
+	return pair.commit(publish)
+}
+
+func (p migrationPair) commit(publish func(migrationPair, string) error) (err error) {
 	defer func() {
-		err = errors.Join(err, pair.finish())
+		err = errors.Join(err, p.finish())
 	}()
 
-	if err := publish(pair, ".down.sql"); err != nil {
+	if err := publish(p, ".down.sql"); err != nil {
 		return err
 	}
 
-	return publish(pair, ".up.sql")
+	return publish(p, ".up.sql")
 }
 
 func stageMigrationPair(folder *os.Root, base, upScript, downScript string) (migrationPair, error) {
-	id := rand.Text()
-	stage := migrationStagePrefix + id
-	if err := folder.Mkdir(stage, 0700); err != nil {
-		return migrationPair{}, fmt.Errorf("create migration staging directory: %w", err)
+	stage, err := newMigrationStage(folder, base)
+	if err != nil {
+		return migrationPair{}, err
 	}
 
-	upPath := filepath.Join(stage, base+".up.sql")
-	if err := writeStagedMigration(folder, upPath, upScript); err != nil {
-		return migrationPair{}, errors.Join(err, folder.RemoveAll(stage))
+	if err := stage.write(".up.sql", upScript); err != nil {
+		return migrationPair{}, errors.Join(err, stage.discard())
 	}
 
-	downPath := filepath.Join(stage, base+".down.sql")
-	if err := writeStagedMigration(folder, downPath, downScript); err != nil {
-		return migrationPair{}, errors.Join(err, folder.RemoveAll(stage))
+	if err := stage.write(".down.sql", downScript); err != nil {
+		return migrationPair{}, errors.Join(err, stage.discard())
 	}
 
-	journal := migrationPublishPrefix + id
-	if err := folder.Rename(stage, journal); err != nil {
-		return migrationPair{}, errors.Join(fmt.Errorf("prepare migration %s: %w", base, err), folder.RemoveAll(stage))
+	pair, err := stage.prepare()
+	if err != nil {
+		return migrationPair{}, errors.Join(err, stage.discard())
 	}
 
-	return migrationPair{folder: folder, journal: journal, base: base}, nil
+	return pair, nil
 }
 
-func writeStagedMigration(folder *os.Root, path, content string) error {
-	file, err := folder.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+func newMigrationStage(folder *os.Root, base string) (migrationStage, error) {
+	path := migrationStagePrefix + rand.Text()
+	if err := folder.Mkdir(path, 0700); err != nil {
+		return migrationStage{}, fmt.Errorf("create migration staging directory: %w", err)
+	}
+
+	return migrationStage{folder: folder, path: path, base: base}, nil
+}
+
+func (s migrationStage) open(suffix string) (*os.File, error) {
+	path := filepath.Join(s.path, s.base+suffix)
+	file, err := s.folder.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("stage migration: %w", err)
+		return nil, fmt.Errorf("stage migration: %w", err)
+	}
+
+	return file, nil
+}
+
+func (s migrationStage) write(suffix, content string) error {
+	file, err := s.open(suffix)
+	if err != nil {
+		return err
 	}
 
 	_, writeErr := file.WriteString(content)
@@ -84,6 +112,19 @@ func writeStagedMigration(folder *os.Root, path, content string) error {
 	}
 
 	return nil
+}
+
+func (s migrationStage) prepare() (migrationPair, error) {
+	journal := migrationPublishPrefix + strings.TrimPrefix(s.path, migrationStagePrefix)
+	if err := s.folder.Rename(s.path, journal); err != nil {
+		return migrationPair{}, fmt.Errorf("prepare migration %s: %w", s.base, err)
+	}
+
+	return migrationPair{folder: s.folder, journal: journal, base: s.base}, nil
+}
+
+func (s migrationStage) discard() error {
+	return s.folder.RemoveAll(s.path)
 }
 
 func (p migrationPair) publish(suffix string) error {

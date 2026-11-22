@@ -49,10 +49,9 @@ type (
 
 	Ddl struct {
 		Definition *Migration
-		Insert     *Migration
 		Reference  *Migration
 		ForeignKey *Migration
-		Name       string
+		HasInsert  bool
 	}
 )
 
@@ -87,7 +86,8 @@ func (t *Table) Detail(schema, table string) (map[string]*Column, error) {
 	return result, nil
 }
 
-func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly bool) (*Ddl, error) {
+func (t *Table) GenerateContext(ctx context.Context, name string, insertUp, insertDown io.StringWriter) (*Ddl, error) {
+	schemaOnly := insertUp == nil
 	options := []string{
 		"--no-comments",
 		"--no-publications",
@@ -143,8 +143,6 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 	var downReferenceScript strings.Builder
 	var upForeignScript strings.Builder
 	var downForeignScript strings.Builder
-	var insertScript strings.Builder
-	var deleteScript strings.Builder
 
 	var stderr dumpErrorOutput
 	cli.Stderr = &stderr
@@ -162,18 +160,25 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 
 	line, readErr := readDumpLine(reader)
 	var skip bool
+	var hasInsert bool
 	var inInsert bool
+	var writeErr error
 	var quote byte
 	var escapes bool
 	for readErr == nil {
 		nextLine, nextErr := readDumpLine(reader)
 		if inInsert {
-			insertScript.WriteByte('\n')
-			insertScript.WriteString(line)
 			quote, escapes = insertQuoteState(line, quote, escapes)
 			inInsert = quote != 0 || !strings.HasSuffix(strings.TrimSpace(line), ");")
-			if !inInsert {
-				insertScript.WriteByte('\n')
+			ending := "\n"
+			if inInsert {
+				ending = ""
+			}
+
+			writeErr = writeDumpStrings(insertUp, "\n", line, ending)
+
+			if writeErr != nil {
+				break
 			}
 
 			goto next
@@ -186,22 +191,25 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 		}
 
 		if t.insertScript(line) {
+			hasInsert = true
 			quote, escapes = insertQuoteState(line, 0, false)
 			inInsert = quote != 0 || !strings.HasSuffix(strings.TrimSpace(line), ");")
-
-			insertScript.WriteString(line)
-			if primaryKey != "" {
-				deleteScript.WriteString("DELETE FROM ")
-				deleteScript.WriteString(name)
-				deleteScript.WriteString(" WHERE ")
-				deleteScript.WriteString(primaryKey)
-				deleteScript.WriteString(" = ")
-				deleteScript.WriteString(t.keyValue(line, name, !inInsert))
-				deleteScript.WriteString(";\n")
+			ending := "\n"
+			if inInsert {
+				ending = ""
 			}
 
-			if !inInsert {
-				insertScript.WriteString("\n")
+			writeErr = writeDumpStrings(insertUp, line, ending)
+
+			if writeErr != nil {
+				break
+			}
+
+			if primaryKey != "" {
+				writeErr = writeDumpStrings(insertDown, "DELETE FROM ", name, " WHERE ", primaryKey, " = ", t.keyValue(line, name, !inInsert), ";\n")
+				if writeErr != nil {
+					break
+				}
 			}
 
 			goto next
@@ -258,13 +266,18 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 		readErr = nextErr
 	}
 
-	if readErr != io.EOF {
+	if writeErr != nil || readErr != io.EOF {
 		killErr := cli.Process.Kill()
 		if errors.Is(killErr, os.ErrProcessDone) {
 			killErr = nil
 		}
 
-		return nil, fmt.Errorf("read pg_dump table %s: %w", name, errors.Join(ctx.Err(), readErr, killErr, cli.Wait()))
+		waitErr := cli.Wait()
+		if writeErr != nil {
+			return nil, fmt.Errorf("write data migration for table %s: %w", name, errors.Join(writeErr, ctx.Err(), killErr, waitErr))
+		}
+
+		return nil, fmt.Errorf("read pg_dump table %s: %w", name, errors.Join(ctx.Err(), readErr, killErr, waitErr))
 	}
 
 	waitErr := cli.Wait()
@@ -282,14 +295,10 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 	}
 
 	return &Ddl{
-		Name: strings.ReplaceAll(name, ".", "_"),
+		HasInsert: hasInsert,
 		Definition: &Migration{
 			UpScript:   ddlReplacer.Replace(upScript.String()),
 			DownScript: downScript.String(),
-		},
-		Insert: &Migration{
-			UpScript:   insertScript.String(),
-			DownScript: deleteScript.String(),
 		},
 		Reference: &Migration{
 			UpScript:   upReferenceScript.String(),
@@ -300,6 +309,25 @@ func (t *Table) GenerateContext(ctx context.Context, name string, schemaOnly boo
 			DownScript: downForeignScript.String(),
 		},
 	}, nil
+}
+
+func writeDumpStrings(writer io.StringWriter, parts ...string) error {
+	if writer == nil {
+		return nil
+	}
+
+	for _, part := range parts {
+		n, err := writer.WriteString(part)
+		if err != nil {
+			return err
+		}
+
+		if n != len(part) {
+			return io.ErrShortWrite
+		}
+	}
+
+	return nil
 }
 
 func acquireDumpReader(source io.Reader) *bufio.Reader {
