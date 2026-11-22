@@ -211,33 +211,7 @@ func TestMigrationCommandsUseOnlyCompletePairs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			state := &migrationTestDB{version: tc.from, dirty: tc.dirty}
-			connect := func(conn *config.Connection) (*sql.DB, error) {
-				if conn != cfg.Connections["target"] {
-					return nil, fmt.Errorf("unexpected fixture connection")
-				}
-
-				return sql.OpenDB(state), nil
-			}
-
-			var err error
-			switch tc.command {
-			case "run":
-				cmd := NewRun(cfg)
-				cmd.connect = connect
-				err = cmd.Call("target", "public", tc.step)
-			case "up":
-				cmd := NewUp(cfg)
-				cmd.connect = connect
-				err = cmd.Call("target", "public")
-			case "down":
-				cmd := NewDown(cfg)
-				cmd.connect = connect
-				err = cmd.Call("target", "public")
-			case "sync":
-				cmd := NewSync(cfg)
-				cmd.connect = connect
-				err = cmd.Run("source", "replicas", "public")
-			}
+			err := callMigrationCommand(cfg, tc.command, tc.step, state)
 
 			if tc.wantError {
 				if err == nil || !strings.Contains(err.Error(), "has no complete pair") {
@@ -257,5 +231,128 @@ func TestMigrationCommandsUseOnlyCompletePairs(t *testing.T) {
 				t.Fatalf("version = %d (dirty: %t), want %d (dirty: %t)", state.version, state.dirty, tc.to, tc.dirty)
 			}
 		})
+	}
+}
+
+func TestMigrationCommandsRejectDirtyPairsPublishedAfterOpeningSource(t *testing.T) {
+	const dirtyVersion = 999
+	for _, command := range []string{"up", "down", "sync"} {
+		t.Run(command, func(t *testing.T) {
+			cfg := versionCommandFixture(t)
+			cfg.Clusters = map[string][]string{"replicas": {"source", "target"}}
+			upPath := filepath.Join(cfg.Folder, "public", "999_interrupted.up.sql")
+			publish := func() error {
+				return os.WriteFile(upPath, []byte("SELECT 'late up';"), 0600)
+			}
+
+			state := &migrationTestDB{version: dirtyVersion, dirty: true, beforeVersion: publish}
+			var wantSQL []string
+			var wantWrites []int64
+			if command == "up" {
+				state.version, state.dirty = 104, false
+				state.beforeVersion = func() error {
+					state.beforeVersion = func() error {
+						state.version, state.dirty = dirtyVersion, true
+
+						return publish()
+					}
+
+					return nil
+				}
+				wantSQL = []string{"SELECT 'finish up';"}
+				wantWrites = []int64{106, 106}
+			}
+
+			err := callMigrationCommand(cfg, command, 0, state)
+			if err == nil || !strings.Contains(err.Error(), "dirty migration version 999 has no complete pair") {
+				t.Errorf("error = %v, want an incomplete dirty pair error", err)
+			}
+
+			if _, err := os.Stat(upPath); err != nil {
+				t.Fatalf("migration pair did not complete during the command: %v", err)
+			}
+
+			if state.version != dirtyVersion || !state.dirty {
+				t.Errorf("state = %d (dirty: %t), want %d (dirty: true)", state.version, state.dirty, dirtyVersion)
+			}
+
+			if !slices.Equal(state.executed, wantSQL) || !slices.Equal(state.writes, wantWrites) {
+				t.Fatalf("SQL = %v, version writes = %v; want %v and %v", state.executed, state.writes, wantSQL, wantWrites)
+			}
+		})
+	}
+}
+
+func TestMigrationCommandsRollBackDirtyPairsAlreadyInSnapshot(t *testing.T) {
+	cfg := versionCommandFixture(t)
+	cfg.Clusters = map[string][]string{"replicas": {"source", "target"}}
+
+	for _, command := range []string{"up", "down", "sync"} {
+		t.Run(command, func(t *testing.T) {
+			state := &migrationTestDB{version: 106, dirty: true}
+			wantSQL := []string{"SELECT 'finish down';"}
+			wantWrites := []int64{106, 104, 104}
+			if command == "up" {
+				state.version, state.dirty = 104, false
+				state.beforeVersion = func() error {
+					state.beforeVersion = func() error {
+						state.dirty = true
+
+						return nil
+					}
+
+					return nil
+				}
+				wantSQL = append([]string{"SELECT 'finish up';"}, wantSQL...)
+				wantWrites = append([]int64{106, 106}, wantWrites...)
+			}
+
+			if err := callMigrationCommand(cfg, command, 0, state); err != nil {
+				t.Fatal(err)
+			}
+
+			if state.version != 104 || state.dirty {
+				t.Errorf("state = %d (dirty: %t), want 104 (dirty: false)", state.version, state.dirty)
+			}
+
+			if !slices.Equal(state.executed, wantSQL) || !slices.Equal(state.writes, wantWrites) {
+				t.Fatalf("SQL = %v, version writes = %v; want %v and %v", state.executed, state.writes, wantSQL, wantWrites)
+			}
+		})
+	}
+}
+
+func callMigrationCommand(cfg *config.Migration, command string, step int, state *migrationTestDB) error {
+	connect := func(conn *config.Connection) (*sql.DB, error) {
+		if conn != cfg.Connections["target"] {
+			return nil, fmt.Errorf("unexpected fixture connection")
+		}
+
+		return sql.OpenDB(state), nil
+	}
+
+	switch command {
+	case "run":
+		cmd := NewRun(cfg)
+		cmd.connect = connect
+
+		return cmd.Call("target", "public", step)
+	case "up":
+		cmd := NewUp(cfg)
+		cmd.connect = connect
+
+		return cmd.Call("target", "public")
+	case "down":
+		cmd := NewDown(cfg)
+		cmd.connect = connect
+
+		return cmd.Call("target", "public")
+	case "sync":
+		cmd := NewSync(cfg)
+		cmd.connect = connect
+
+		return cmd.Run("source", "replicas", "public")
+	default:
+		return fmt.Errorf("unexpected fixture command %q", command)
 	}
 }

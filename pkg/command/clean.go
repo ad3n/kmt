@@ -3,7 +3,6 @@ package command
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"path/filepath"
 
 	"github.com/ad3n/kmt/v2/pkg/config"
@@ -59,11 +58,7 @@ func (c *clean) Call(source string, schema string) (err error) {
 	}
 
 	if dirty {
-		if err := requireMigrationPair(migrations, version); err != nil {
-			return fmt.Errorf("dirty %w", err)
-		}
-
-		if err := rollbackMigration(migrator, version); err != nil {
+		if err := rollbackDirtyMigration(migrator, migrations, version); err != nil {
 			return err
 		}
 	}

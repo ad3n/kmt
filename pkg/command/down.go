@@ -21,7 +21,7 @@ func NewDown(cfg *config.Migration) *down {
 	return &down{config: cfg, connect: config.NewConnection}
 }
 
-func (d *down) Call(source string, schema string) error {
+func (d *down) Call(source string, schema string) (err error) {
 	dbConfig, ok := d.config.Connections[source]
 	if !ok {
 		config.ErrorColor.Printf("Database connection '%s' not found\n", config.BoldColor.Sprint(source))
@@ -42,11 +42,19 @@ func (d *down) Call(source string, schema string) error {
 
 		return nil
 	}
-	defer db.Close()
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
 
 	migrationFolder := filepath.Join(d.config.Folder, schema)
-	migrator := config.NewMigrator(db, dbConfig.Name, schema, migrationFolder)
-	defer migrator.Close()
+	migrator, migrations, err := config.OpenMigratorWithSource(db, dbConfig.Name, schema, migrationFolder)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sourceErr, databaseErr := migrator.Close()
+		err = errors.Join(err, sourceErr, databaseErr)
+	}()
 
 	progress := spinner.New(spinner.CharSets[config.SPINER_INDEX], config.SPINER_DURATION)
 	progress.Suffix = fmt.Sprintf(" Tear down migrations for %s on %s schema", config.SuccessColor.Sprint(source), config.SuccessColor.Sprint(schema))
@@ -72,7 +80,7 @@ func (d *down) Call(source string, schema string) error {
 	}
 
 	if version > 0 && dirty {
-		if err := rollbackDirtyMigration(migrator, migrationFolder, version); err != nil {
+		if err := rollbackDirtyMigration(migrator, migrations, version); err != nil {
 			return errors.Join(downErr, err)
 		}
 	}

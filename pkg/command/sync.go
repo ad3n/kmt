@@ -59,7 +59,7 @@ func (s *sync) syncConnection(target *config.Connection, name, schema string) (e
 	}()
 
 	migrationFolder := filepath.Join(s.config.Folder, schema)
-	migrator, err := config.OpenMigrator(db, target.Name, schema, migrationFolder)
+	migrator, migrations, err := config.OpenMigratorWithSource(db, target.Name, schema, migrationFolder)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func (s *sync) syncConnection(target *config.Connection, name, schema string) (e
 		return upErr
 	}
 
-	if err := rollbackDirtyMigration(migrator, migrationFolder, version); err != nil {
+	if err := rollbackDirtyMigration(migrator, migrations, version); err != nil {
 		return errors.Join(upErr, err)
 	}
 

@@ -38,20 +38,11 @@ func completeMigrationVersions(folder string) (map[uint]struct{}, error) {
 	return versions, nil
 }
 
-func rollbackDirtyMigration(migrator *gomigrate.Migrate, folder string, version uint) error {
-	versions, err := completeMigrationVersions(folder)
-	if err != nil {
-		return err
+func rollbackDirtyMigration(migrator *gomigrate.Migrate, migrations source.Driver, version uint) error {
+	if err := requireMigrationPair(migrations, version); err != nil {
+		return fmt.Errorf("dirty %w", err)
 	}
 
-	if _, ok := versions[version]; !ok {
-		return fmt.Errorf("dirty migration version %d has no complete pair", version)
-	}
-
-	return rollbackMigration(migrator, version)
-}
-
-func rollbackMigration(migrator *gomigrate.Migrate, version uint) error {
 	if err := migrator.Force(int(version)); err != nil {
 		return err
 	}

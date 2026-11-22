@@ -91,11 +91,7 @@ func (d *drop) Call(source string, schema string) (err error) {
 	}
 
 	if dirty {
-		if err := requireMigrationPair(migrations, version); err != nil {
-			return fmt.Errorf("dirty %w", err)
-		}
-
-		if err := rollbackMigration(migrator, version); err != nil {
+		if err := rollbackDirtyMigration(migrator, migrations, version); err != nil {
 			return err
 		}
 	}
