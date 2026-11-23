@@ -15,7 +15,7 @@ func validMigrationComponent(name string) bool {
 	return filepath.IsLocal(name) && name != "." && !strings.ContainsAny(name, `/\`)
 }
 
-func withMigrationWriteLock(path, schema string, write func(*os.Root) error) (err error) {
+func withMigrationFolder(path, schema string, write func(*os.Root) error) (err error) {
 	if !validMigrationComponent(schema) {
 		return fmt.Errorf("invalid migration schema %q", schema)
 	}
@@ -43,18 +43,6 @@ func withMigrationWriteLock(path, schema string, write func(*os.Root) error) (er
 	defer func() {
 		err = errors.Join(err, folder.Close())
 	}()
-
-	lock, err := base.OpenFile(".kmt-generate-"+schema+".lock", os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return fmt.Errorf("acquire generation lock for schema %s: %w", schema, err)
-	}
-	defer func() {
-		err = errors.Join(err, lock.Close())
-	}()
-
-	if err := tryLockGeneration(lock); err != nil {
-		return fmt.Errorf("acquire generation lock for schema %s: %w", schema, err)
-	}
 
 	if err := recoverMigrationPairs(folder); err != nil {
 		return fmt.Errorf("recover migrations for schema %s: %w", schema, err)

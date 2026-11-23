@@ -38,7 +38,7 @@ func (c *create) Call(schema, name string) error {
 	}
 
 	var base string
-	err := withMigrationWriteLock(c.config.Folder, schema, func(folder *os.Root) error {
+	err := withMigrationFolder(c.config.Folder, schema, func(folder *os.Root) error {
 		version, err := nextVersion(folder.FS(), time.Now().Unix())
 		if err != nil {
 			return err

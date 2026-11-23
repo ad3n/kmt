@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -23,57 +22,6 @@ import (
 )
 
 const interruptedMigrationVersion = 5_000_000_000
-
-func TestGenerateLockRecoversAfterSIGKILL(t *testing.T) {
-	folder := t.TempDir()
-	marker := filepath.Join(t.TempDir(), "lock-held")
-	newProcess := generateTestProcess(t, folder)
-	holder := newProcess(marker)
-	startGenerateProcess(t, holder, marker)
-
-	output, err := newProcess("").CombinedOutput()
-	if err == nil || !strings.Contains(string(output), "acquire generation lock") {
-		t.Fatalf("concurrent generate should fail at the lock, got %v\n%s", err, output)
-	}
-
-	migrationFolder := filepath.Join(folder, "public")
-	entries, err := os.ReadDir(migrationFolder)
-	if err != nil || len(entries) != 0 {
-		t.Fatalf("concurrent generate left %d files, read error %v", len(entries), err)
-	}
-
-	killGenerateProcess(t, holder)
-
-	lockPath := filepath.Join(folder, ".kmt-generate-public.lock")
-	before, err := os.Stat(lockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	output, err = newProcess("").CombinedOutput()
-	if err != nil {
-		t.Fatalf("generate after SIGKILL failed: %v\n%s", err, output)
-	}
-
-	after, err := os.Stat(lockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !os.SameFile(before, after) {
-		t.Fatal("generate replaced the lock file")
-	}
-
-	entries, err = os.ReadDir(migrationFolder)
-	if err != nil || len(entries) != 2 {
-		t.Fatalf("expected one migration pair, got %d files, read error %v", len(entries), err)
-	}
-
-	prefix, ok := strings.CutSuffix(entries[0].Name(), "_view_locked_view.down.sql")
-	if !ok || entries[1].Name() != prefix+"_view_locked_view.up.sql" {
-		t.Fatalf("expected matching view migrations, got %v", entries)
-	}
-}
 
 func TestGenerateRecoversInterruptedMigrationPair(t *testing.T) {
 	for _, checkpoint := range []string{"before_links", "first_link", "both_links"} {
@@ -185,9 +133,11 @@ func TestGenerateRecoversInterruptedMigrationPair(t *testing.T) {
 				assertFileContent(t, migrationFolder, interrupted+".down.sql", "interrupted down")
 			}
 
-			retry := fmt.Sprintf("%d_view_locked_view", next)
-			assertFileContent(t, migrationFolder, retry+".up.sql", "CREATE OR REPLACE VIEW locked_view AS SELECT 1")
-			assertFileContent(t, migrationFolder, retry+".down.sql", "DROP VIEW IF EXISTS locked_view;")
+			retry := fmt.Sprintf("%d_view_recovered_view", next)
+			assertFileContent(t, migrationFolder, retry+".up.sql", "CREATE OR REPLACE VIEW recovered_view AS SELECT 1")
+			assertFileContent(t, migrationFolder, retry+".down.sql", "DROP VIEW IF EXISTS recovered_view;")
+
+			assertOnlyMigrationSchema(t, folder)
 
 			entries, err := os.ReadDir(migrationFolder)
 			if err != nil || len(entries) != wantCount {
@@ -203,7 +153,7 @@ func TestCreateRecoversInterruptedMigrationPair(t *testing.T) {
 			folder := t.TempDir()
 			migrationFolder := filepath.Join(folder, "public")
 			stored := fmt.Sprintf("%d_manual", interruptedMigrationVersion-1)
-			if err := withMigrationWriteLock(folder, "public", func(root *os.Root) error {
+			if err := withMigrationFolder(folder, "public", func(root *os.Root) error {
 				return writeMigrationPair(root, stored, "original up", "original down", migrationPair.publish)
 			}); err != nil {
 				t.Fatal(err)
@@ -213,13 +163,6 @@ func TestCreateRecoversInterruptedMigrationPair(t *testing.T) {
 			marker := filepath.Join(t.TempDir(), "create-checkpoint")
 			holder := newProcess(marker, "KMT_TEST_CREATE="+checkpoint)
 			startGenerateProcess(t, holder, marker)
-
-			for _, env := range [][]string{nil, {"KMT_TEST_CREATE=normal"}} {
-				output, err := newProcess("", env...).CombinedOutput()
-				if err == nil || !strings.Contains(string(output), "acquire generation lock") {
-					t.Fatalf("writer should fail while create holds the lock, got %v\n%s", err, output)
-				}
-			}
 
 			killGenerateProcess(t, holder)
 
@@ -265,11 +208,26 @@ func TestCreateRecoversInterruptedMigrationPair(t *testing.T) {
 			assertFileContent(t, migrationFolder, retry+".up.sql", "")
 			assertFileContent(t, migrationFolder, retry+".down.sql", "")
 
+			assertOnlyMigrationSchema(t, folder)
+
 			entries, err := os.ReadDir(migrationFolder)
 			if err != nil || len(entries) != wantFiles {
 				t.Fatalf("expected %d SQL files, got %v, read error %v", wantFiles, entries, err)
 			}
 		})
+	}
+}
+
+func assertOnlyMigrationSchema(t *testing.T, folder string) {
+	t.Helper()
+
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(entries) != 1 || entries[0].Name() != "public" || !entries[0].IsDir() {
+		t.Fatalf("expected only the public schema directory, got %v", entries)
 	}
 }
 
@@ -291,11 +249,11 @@ func generateTestProcess(t *testing.T, folder string) func(string, ...string) *e
 	t.Cleanup(cancel)
 
 	return func(heldMarker string, env ...string) *exec.Cmd {
-		cmd := exec.CommandContext(ctx, executable, "-test.run=^TestGenerateLockProcess$")
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^TestMigrationPairRecoveryProcess$")
 		cmd.Env = append(os.Environ(),
-			"KMT_LOCK_TEST_FOLDER="+folder,
-			"KMT_LOCK_TEST_PGDUMP="+pgDump,
-			"KMT_LOCK_TEST_MARKER="+heldMarker,
+			"KMT_RECOVERY_TEST_FOLDER="+folder,
+			"KMT_RECOVERY_TEST_PGDUMP="+pgDump,
+			"KMT_RECOVERY_TEST_MARKER="+heldMarker,
 		)
 		cmd.Env = append(cmd.Env, env...)
 
@@ -370,13 +328,13 @@ func killGenerateProcess(t *testing.T, holder *exec.Cmd) {
 	}
 }
 
-func TestGenerateLockProcess(t *testing.T) {
-	folder := os.Getenv("KMT_LOCK_TEST_FOLDER")
+func TestMigrationPairRecoveryProcess(t *testing.T) {
+	folder := os.Getenv("KMT_RECOVERY_TEST_FOLDER")
 	if folder == "" {
 		return
 	}
 
-	marker := os.Getenv("KMT_LOCK_TEST_MARKER")
+	marker := os.Getenv("KMT_RECOVERY_TEST_MARKER")
 	if checkpoint := os.Getenv("KMT_TEST_CREATE"); checkpoint != "" {
 		cmd := NewCreate(&config.Migration{
 			Folder: folder,
@@ -415,21 +373,15 @@ func TestGenerateLockProcess(t *testing.T) {
 
 	cfg := &config.Migration{
 		Folder: folder,
-		PgDump: os.Getenv("KMT_LOCK_TEST_PGDUMP"),
+		PgDump: os.Getenv("KMT_RECOVERY_TEST_PGDUMP"),
 		Connections: map[string]*config.Connection{
 			"source": {Schemas: map[string]map[string][]string{"public": nil}},
 		},
 	}
 	connection := sql.OpenDB(emptyDriver{query: func(string) (driver.Rows, error) {
-		if marker != "" {
-			if err := waitForSIGKILL(marker); err != nil {
-				return nil, err
-			}
-		}
-
 		return &fixtureRows{
 			columns: []string{"name", "definition"},
-			values:  []driver.Value{"locked_view", "SELECT 1"},
+			values:  []driver.Value{"recovered_view", "SELECT 1"},
 		}, nil
 	}})
 	t.Cleanup(func() {
@@ -451,18 +403,6 @@ func publishInterruptedMigration(folder, marker, checkpoint string) (err error) 
 	defer func() {
 		err = errors.Join(err, root.Close())
 	}()
-
-	lock, err := root.OpenFile(".kmt-generate-public.lock", os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err = errors.Join(err, lock.Close())
-	}()
-
-	if err := tryLockGeneration(lock); err != nil {
-		return err
-	}
 
 	migrations, err := root.OpenRoot("public")
 	if err != nil {

@@ -85,7 +85,7 @@ func (g *generate) CallContext(ctx context.Context, connection string, schema st
 		return fmt.Errorf("check pg_dump: %w", errors.Join(ctx.Err(), err))
 	}
 
-	err := withMigrationWriteLock(g.config.Folder, schema, func(folder *os.Root) error {
+	err := withMigrationFolder(g.config.Folder, schema, func(folder *os.Root) error {
 		return g.generateSchema(ctx, connection, schema, schemaConfig, folder, scope)
 	})
 	if err != nil {
